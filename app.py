@@ -3,16 +3,16 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Intentar Plotly para gráficos interactivos; si no está, usa gráficos nativos
+# Importar Plotly para gráficos interactivos con etiquetas sobre las barras
 try:
-    import plotly.express as px
+  import plotly.express as px
 
-    HAS_PLOTLY = True
+  HAS_PLOTLY = True
 except ImportError:
-    HAS_PLOTLY = False
+  HAS_PLOTLY = False
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI
+# 1. CONFIGURACIÓN DE PÁGINA Y PALETA DE COLORES COOPI
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Consolidación Histórica de Participantes - COOPI",
@@ -41,7 +41,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas de los municipios de Sucre para el Mapa
+# Coordenadas geográficas exactas de los municipios del Estado Sucre
 COORD_MUNICIPIOS = {
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
@@ -54,30 +54,30 @@ COORD_MUNICIPIOS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO EN LA PARTE SUPERIOR DERECHA
+# 2. ENCABEZADO CON LOGO OFICIAL
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.5, 1])
 
 with col_tit:
-    st.title("Consolidación Histórica de Participantes y Atenciones")
-    st.caption("COOPI - Cooperazione Internazionale | Misión Venezuela")
+  st.title("Consolidación Histórica de Participantes y Atenciones")
+  st.caption("COOPI - Cooperazione Internazionale | Misión Venezuela")
 
 with col_logo:
-    st.markdown(
-        """
+  st.markdown(
+      """
         <div style="text-align: right;">
             <img src="https://raw.githubusercontent.com/integrasven2026/tablero-integras-meal/main/logo_coopi.png" 
                  style="max-width: 170px; height: auto;" 
                  onerror="this.src='https://coopi.org/images/logo.png'">
         </div>
         """,
-        unsafe_allow_html=True,
-    )
+      unsafe_allow_html=True,
+  )
 
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y ASIGNACIÓN DINÁMICA DE SECTORES DESDE KOBO
+# 3. CARGA Y CLASIFICACIÓN DE DATOS DESDE KOBO
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -100,143 +100,141 @@ MAPA_MUNICIPIOS = {
 
 
 def clasificar_sector_meal(row, nombre_proyecto):
-    comp = str(row.get("Componente:", "")).upper()
-    act = str(row.get("Actividad:", "")).lower()
-    res = str(row.get("Resultado:", "")).lower()
+  comp = str(row.get("Componente:", "")).upper()
+  act = str(row.get("Actividad:", "")).lower()
+  res = str(row.get("Resultado:", "")).lower()
 
-    if (
-        "sensibiliz" in act
-         or "derechos" in act
-         or "protecc" in act
-         or "campaña" in act
-         or "género" in act
-         or "r2" in res
-    ):
-        return "Protección y Sensibilización Comunitaria"
-    elif "residuo" in comp or "desecho" in act or "recicl" in act:
-        return "Gestión Ambiental y Residuos Sólidos"
-    elif "negocio" in act or "pesca" in act or "ingreso" in act or "r3" in res:
-        return "Medios de Vida y Resiliencia Ambiental"
-    elif "wash" in comp or "agua" in act or "saneamiento" in act or "hidro" in act:
-        return "Agua, Saneamiento e Higiene (WASH)"
-    else:
-        if nombre_proyecto == "Agua para la Vida":
-            return "Agua, Saneamiento e Higiene (WASH)"
-        return "Medios de Vida y Resiliencia Ambiental"
+  if (
+      "sensibiliz" in act
+      or "derechos" in act
+      or "protecc" in act
+      or "campaña" in act
+      or "género" in act
+      or "r2" in res
+  ):
+    return "Protección y Sensibilización Comunitaria"
+  elif "residuo" in comp or "desecho" in act or "recicl" in act:
+    return "Gestión Ambiental y Residuos Sólidos"
+  elif "negocio" in act or "pesca" in act or "ingreso" in act or "r3" in res:
+    return "Medios de Vida y Resiliencia Ambiental"
+  elif "wash" in comp or "agua" in act or "saneamiento" in act or "hidro" in act:
+    return "Agua, Saneamiento e Higiene (WASH)"
+  else:
+    if nombre_proyecto == "Agua para la Vida":
+      return "Agua, Saneamiento e Higiene (WASH)"
+    return "Medios de Vida y Resiliencia Ambiental"
 
 
 @st.cache_data(ttl=600)
 def cargar_datos_kobo():
-    dfs = []
-    for nombre_proy, asset_id in PROYECTOS.items():
-        url = f"https://eu.kobotoolbox.org/api/v2/assets/{asset_id}/data.json"
-        try:
-            res = requests.get(url, headers=HEADERS, timeout=15)
-            if res.status_code == 200:
-                data = res.json().get("results", [])
-                df = pd.DataFrame(data)
+  dfs = []
+  for nombre_proy, asset_id in PROYECTOS.items():
+    url = f"https://eu.kobotoolbox.org/api/v2/assets/{asset_id}/data.json"
+    try:
+      res = requests.get(url, headers=HEADERS, timeout=15)
+      if res.status_code == 200:
+        data = res.json().get("results", [])
+        df = pd.DataFrame(data)
 
-                if not df.empty:
-                    df["Proyecto"] = nombre_proy
+        if not df.empty:
+          df["Proyecto"] = nombre_proy
 
-                    # Normalización de Fecha
-                    col_f = next(
-                        (
-                            c
-                            for c in df.columns
-                            if "start" in c.lower() or "fecha" in c.lower()
-                        ),
-                        df.columns[0],
-                    )
-                    df["Año"] = (
-                        pd.to_datetime(df[col_f], errors="coerce", utc=True)
-                        .dt.year.fillna(2025)
-                        .astype(int)
-                        .astype(str)
-                    )
+          # Normalización de Fecha con soporte UTC
+          col_f = next(
+              (
+                  c
+                  for c in df.columns
+                  if "start" in c.lower() or "fecha" in c.lower()
+              ),
+              df.columns[0],
+          )
+          df["Año"] = (
+              pd.to_datetime(df[col_f], errors="coerce", utc=True)
+              .dt.year.fillna(2025)
+              .astype(int)
+              .astype(str)
+          )
 
-                    # Municipio limpio
-                    col_mun = next(
-                        (c for c in df.columns if "municipio" in c.lower()),
-                        "Municipio",
-                    )
-                    df["Municipio_Clean"] = (
-                        df[col_mun]
-                        .astype(str)
-                        .replace(MAPA_MUNICIPIOS)
-                        .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
-                    )
+          # Limpieza de nombres de Municipio
+          col_mun = next(
+              (c for c in df.columns if "municipio" in c.lower()),
+              "Municipio",
+          )
+          df["Municipio_Clean"] = (
+              df[col_mun]
+              .astype(str)
+              .replace(MAPA_MUNICIPIOS)
+              .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
+          )
 
-                    # Estado limpio
-                    col_est = next(
-                        (c for c in df.columns if "estado" in c.lower()),
-                        "Estado",
-                    )
-                    df["Estado_Clean"] = (
-                        df[col_est].astype(str).replace("VE19", "Sucre")
-                        if col_est in df.columns
-                        else "Sucre"
-                    )
+          # Limpieza de Estado
+          col_est = next(
+              (c for c in df.columns if "estado" in c.lower()),
+              "Estado",
+          )
+          df["Estado_Clean"] = (
+              df[col_est].astype(str).replace("VE19", "Sucre")
+              if col_est in df.columns
+              else "Sucre"
+          )
 
-                    # Clasificación Sector MEAL Dinámica (Incluye Protección)
-                    df["Sector_MEAL"] = df.apply(
-                        lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
-                    )
+          # Clasificación Dinámica MEAL
+          df["Sector_MEAL"] = df.apply(
+              lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
+          )
 
-                    # Variables numéricas
-                    for col in [
-                        "suma_hombres",
-                        "suma_mujeres",
-                        "suma_intersexuales",
-                        "suma_total",
-                        "calculo_con_dicapacidad",
-                    ]:
-                        if col in df.columns:
-                            df[col] = (
-                                pd.to_numeric(df[col], errors="coerce")
-                                .fillna(0)
-                                .astype(int)
-                            )
-                        else:
-                            df[col] = 0
+          # Conversión numérica de participantes
+          for col in [
+              "suma_hombres",
+              "suma_mujeres",
+              "suma_intersexuales",
+              "suma_total",
+              "calculo_con_dicapacidad",
+          ]:
+            if col in df.columns:
+              df[col] = (
+                  pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+              )
+            else:
+              df[col] = 0
 
-                    dfs.append(df)
-        except Exception:
-            pass
+          dfs.append(df)
+    except Exception:
+      pass
 
-    if dfs:
-        df_full = pd.concat(dfs, ignore_index=True)
-        # Anonimización PII
-        sensibles = [
-            c
-            for c in df_full.columns
-            if any(
-                p in c.lower()
-                for p in [
-                    "nombre",
-                    "apellido",
-                    "cedula",
-                    "telefono",
-                    "celular",
-                    "correo",
-                ]
-            )
-            and "comunidad" not in c.lower()
-            and "establecimiento" not in c.lower()
-        ]
-        df_full.drop(columns=sensibles, inplace=True, errors="ignore")
-        return df_full
-    return pd.DataFrame()
+  if dfs:
+    df_full = pd.concat(dfs, ignore_index=True)
+    # Anonimización PII
+    sensibles = [
+        c
+        for c in df_full.columns
+        if any(
+            p in c.lower()
+            for p in [
+                "nombre",
+                "apellido",
+                "cedula",
+                "telefono",
+                "celular",
+                "correo",
+            ]
+        )
+        and "comunidad" not in c.lower()
+        and "establecimiento" not in c.lower()
+    ]
+    df_full.drop(columns=sensibles, inplace=True, errors="ignore")
+    return df_full
+  return pd.DataFrame()
 
 
 df_base = cargar_datos_kobo()
 
 if df_base.empty:
-    st.info("Cargando datos en vivo desde KoboToolbox...")
-    st.stop()
+  st.info("Cargando datos en vivo desde KoboToolbox...")
+  st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES DE NAVEGACIÓN
+# 4. FILTROS LATERALES
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
@@ -275,7 +273,7 @@ df_filtered = df_base[
 ]
 
 # -----------------------------------------------------------------------------
-# 5. GENERAL DE ATENCIONES Y COBERTURA (CIFRAS EXACTAS)
+# 5. GENERAL DE ATENCIONES Y COBERTURA
 # -----------------------------------------------------------------------------
 st.subheader("General de Atenciones y Cobertura")
 
@@ -295,7 +293,7 @@ c5.metric("Sectores MEAL", df_filtered["Sector_MEAL"].nunique())
 
 st.markdown("---")
 
-# Porcentajes calculados estrictamente sobre Únicos (2,449)
+# Vulnerabilidad calculada sobre Participantes Únicos
 st.subheader("Distribución de Participantes por Grupos de Vulnerabilidad (%)")
 
 v1, v2, v3, v4, v5, v6 = st.columns(6)
@@ -313,31 +311,29 @@ st.markdown("---")
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
 
-# Gráfico 1: Desglose por Edad y Sexo
 tot_h = df_filtered["suma_hombres"].sum()
 tot_m = df_filtered["suma_mujeres"].sum()
 
-df_etario = pd.DataFrame(
-    {
-        "Grupo Etario": [
-            "Niños/Niñas (0-17)",
-            "Niños/Niñas (0-17)",
-            "Adultos (18-59)",
-            "Adultos (18-59)",
-            "Adultos Mayores (60+)",
-            "Adultos Mayores (60+)",
-        ],
-        "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre", "Mujer"],
-        "Total": [
-            int(tot_h * 0.02),
-            int(tot_m * 0.02),
-            int(tot_h * 0.88),
-            int(tot_m * 0.88),
-            int(tot_h * 0.10),
-            int(tot_m * 0.10),
-        ],
-    }
-)
+# Gráfico 1: Edad y Sexo
+df_etario = pd.DataFrame({
+    "Grupo Etario": [
+        "Niños/Niñas (0-17)",
+        "Niños/Niñas (0-17)",
+        "Adultos (18-59)",
+        "Adultos (18-59)",
+        "Adultos Mayores (60+)",
+        "Adultos Mayores (60+)",
+    ],
+    "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre", "Mujer"],
+    "Total": [
+        int(tot_h * 0.02),
+        int(tot_m * 0.02),
+        int(tot_h * 0.88),
+        int(tot_m * 0.88),
+        int(tot_h * 0.10),
+        int(tot_m * 0.10),
+    ],
+})
 tot_et = max(df_etario["Total"].sum(), 1)
 df_etario["Porcentaje"] = ((df_etario["Total"] / tot_et) * 100).round(1)
 df_etario["Etiqueta"] = df_etario.apply(
@@ -345,24 +341,30 @@ df_etario["Etiqueta"] = df_etario.apply(
 )
 
 with g1:
-    st.subheader("Desglose por Sexo y Rango Etario")
-    if HAS_PLOTLY:
-        fig_et = px.bar(
-            df_etario,
-            x="Grupo Etario",
-            y="Total",
-            color="Sexo",
-            barmode="group",
-            text="Etiqueta",
-            color_discrete_sequence=[COLOR_AZUL_COOPI, COLOR_VERDE_COOPI],
-        )
-        fig_et.update_traces(textposition="outside")
-        fig_et.update_layout(yaxis_title="Cantidad de Participantes", height=420)
-        st.plotly_chart(fig_et, use_container_width=True)
-    else:
-        st.bar_chart(df_etario.set_index("Grupo Etario")["Total"])
+  st.subheader("Desglose por Sexo y Rango Etario")
+  if HAS_PLOTLY:
+    fig_et = px.bar(
+        df_etario,
+        x="Grupo Etario",
+        y="Total",
+        color="Sexo",
+        barmode="group",
+        text="Etiqueta",
+        color_discrete_sequence=[COLOR_AZUL_COOPI, COLOR_VERDE_COOPI],
+    )
+    fig_et.update_traces(
+        textposition="outside", textfont=dict(size=12, color="#1F2937")
+    )
+    fig_et.update_layout(
+        yaxis_title="Cantidad de Participantes",
+        yaxis=dict(range=[0, max(df_etario["Total"].max() * 1.25, 10)]),
+        height=420,
+    )
+    st.plotly_chart(fig_et, use_container_width=True)
+  else:
+    st.bar_chart(df_etario.set_index("Grupo Etario")["Total"])
 
-# Gráfico 2: Participantes por Sector MEAL (Con Valor + Porcentaje)
+# Gráfico 2: Sectores MEAL
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["suma_total"]
     .sum()
@@ -376,28 +378,33 @@ df_sec["Etiqueta"] = df_sec.apply(
 )
 
 with g2:
-    st.subheader("Participantes por Sector de Respuesta MEAL")
-    if HAS_PLOTLY:
-        fig_s = px.bar(
-            df_sec,
-            x="Sector",
-            y="Total",
-            text="Etiqueta",
-            color="Sector",
-            color_discrete_sequence=PALETA_COOPI,
-        )
-        fig_s.update_traces(textposition="outside")
-        fig_s.update_layout(
-            yaxis_title="Cantidad de Participantes", showlegend=False, height=420
-        )
-        st.plotly_chart(fig_s, use_container_width=True)
-    else:
-        st.bar_chart(df_sec.set_index("Sector")["Total"])
+  st.subheader("Participantes por Sector de Respuesta MEAL")
+  if HAS_PLOTLY:
+    fig_s = px.bar(
+        df_sec,
+        x="Sector",
+        y="Total",
+        text="Etiqueta",
+        color="Sector",
+        color_discrete_sequence=PALETA_COOPI,
+    )
+    fig_s.update_traces(
+        textposition="outside", textfont=dict(size=12, color="#1F2937")
+    )
+    fig_s.update_layout(
+        yaxis_title="Cantidad de Participantes",
+        yaxis=dict(range=[0, max(df_sec["Total"].max() * 1.25, 10)]),
+        showlegend=False,
+        height=420,
+    )
+    st.plotly_chart(fig_s, use_container_width=True)
+  else:
+    st.bar_chart(df_sec.set_index("Sector")["Total"])
 
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA GEOGRÁFICO INTERACTIVO Y BARRAS POR MUNICIPIO
+# 7. MAPA GEOGRÁFICO CORREGIDO Y BARRAS POR MUNICIPIO
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
@@ -417,41 +424,43 @@ df_mun_bar["Leyenda"] = df_mun_bar.apply(
 )
 
 with col_m1:
-    st.subheader("Ubicación Geográfica por Municipio")
-    map_data = []
-    for _, row in df_mun_bar.iterrows():
-        mun = row["Municipio"]
-        tot = int(row["Total"])
-        if mun in COORD_MUNICIPIOS and tot > 0:
-            map_data.append(
-                {
-                    "lat": COORD_MUNICIPIOS[mun]["lat"],
-                    "lon": COORD_MUNICIPIOS[mun]["lon"],
-                }
-            )
+  st.subheader("Ubicación Geográfica por Municipio")
+  map_data = []
 
-    if map_data:
-        st.map(pd.DataFrame(map_data), zoom=8)
-    else:
-        st.info("No hay datos geográficos para la selección actual.")
+  for _, row in df_mun_bar.iterrows():
+    mun_upper = str(row["Municipio"]).strip().upper()
+    tot = int(row["Total"])
+    if mun_upper in COORD_MUNICIPIOS and tot > 0:
+      map_data.append({
+          "lat": COORD_MUNICIPIOS[mun_upper]["lat"],
+          "lon": COORD_MUNICIPIOS[mun_upper]["lon"],
+      })
+
+  if map_data:
+    st.map(pd.DataFrame(map_data), zoom=8)
+  else:
+    st.info("No hay datos geográficos para la selección actual.")
 
 with col_m2:
-    st.subheader("Participantes Beneficiados por Municipio")
-    if HAS_PLOTLY:
-        fig_m = px.bar(
-            df_mun_bar,
-            x="Municipio",
-            y="Total",
-            color="Leyenda",
-            text="Etiqueta",
-            color_discrete_sequence=PALETA_COOPI,
-        )
-        fig_m.update_traces(textposition="outside")
-        fig_m.update_layout(
-            legend_title_text="Municipio | Total (%)",
-            yaxis_title="Cantidad de Participantes",
-            height=420,
-        )
-        st.plotly_chart(fig_m, use_container_width=True)
-    else:
-        st.bar_chart(df_mun_bar.set_index("Municipio")["Total"])
+  st.subheader("Participantes Beneficiados por Municipio")
+  if HAS_PLOTLY:
+    fig_m = px.bar(
+        df_mun_bar,
+        x="Municipio",
+        y="Total",
+        color="Leyenda",
+        text="Etiqueta",
+        color_discrete_sequence=PALETA_COOPI,
+    )
+    fig_m.update_traces(
+        textposition="outside", textfont=dict(size=12, color="#1F2937")
+    )
+    fig_m.update_layout(
+        legend_title_text="Municipio | Total (%)",
+        yaxis_title="Cantidad de Participantes",
+        yaxis=dict(range=[0, max(df_mun_bar["Total"].max() * 1.25, 10)]),
+        height=420,
+    )
+    st.plotly_chart(fig_m, use_container_width=True)
+  else:
+    st.bar_chart(df_mun_bar.set_index("Municipio")["Total"])
