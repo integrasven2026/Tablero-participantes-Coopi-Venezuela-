@@ -64,16 +64,8 @@ OFFSETS_GEO = [
     (-0.012, 0.012),
 ]
 
-# Logo Vectorial de COOPI en Base64
-SVG_LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="190" height="50">
-  <text x="5" y="52" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="50" fill="#0082C8" letter-spacing="2">COOPI</text>
-  <text x="7" y="70" font-family="'Segoe UI', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#00A859" letter-spacing="1">COOPERAZIONE INTERNAZIONALE</text>
-</svg>"""
-B64_LOGO = base64.b64encode(SVG_LOGO.encode("utf-8")).decode("utf-8")
-DATA_URI_LOGO = f"data:image/svg+xml;base64,{B64_LOGO}"
-
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO VECTORIAL
+# 2. ENCABEZADO CON LOGO OFICIAL
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.2, 1.2])
 
@@ -83,9 +75,12 @@ with col_tit:
 
 with col_logo:
   st.markdown(
-      f"""
-        <div style="text-align: right; padding-top: 10px;">
-            <img src="{DATA_URI_LOGO}" style="max-width: 190px; height: auto;" alt="COOPI Logo">
+      """
+        <div style="text-align: right; padding-top: 5px;">
+            <img src="https://www.coopi.org/images/logo.png" 
+                 style="max-width: 210px; height: auto;" 
+                 alt="Logo Oficial COOPI"
+                 onerror="this.src='https://raw.githubusercontent.com/integrasven2026/tablero-integras-meal/main/logo_coopi.png'">
         </div>
         """,
       unsafe_allow_html=True,
@@ -198,7 +193,6 @@ def cargar_datos_kobo():
         if not df.empty:
           df["Proyecto"] = nombre_proy
 
-          # Fecha
           col_f = next(
               (
                   c
@@ -214,7 +208,6 @@ def cargar_datos_kobo():
               .astype(str)
           )
 
-          # Municipio
           col_mun = next(
               (c for c in df.columns if "municipio" in c.lower()),
               "Municipio",
@@ -226,7 +219,6 @@ def cargar_datos_kobo():
               .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
           )
 
-          # Estado
           col_est = next(
               (c for c in df.columns if "estado" in c.lower()),
               "Estado",
@@ -237,12 +229,10 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          # Clasificación Sector MEAL
           df["Sector_MEAL"] = df.apply(
               lambda r: clasificar_sector_seguro(r, nombre_proy), axis=1
           )
 
-          # Numéricos
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -425,7 +415,7 @@ with g1:
   else:
     st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Participantes Únicos por Sector (Gráfico de Torta / Donut)
+# Gráfico 2: Participantes Únicos por Sector (Torta)
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
