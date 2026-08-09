@@ -73,7 +73,7 @@ B64_LOGO = base64.b64encode(SVG_LOGO.encode("utf-8")).decode("utf-8")
 DATA_URI_LOGO = f"data:image/svg+xml;base64,{B64_LOGO}"
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO VECTORIAL INLINE
+# 2. ENCABEZADO CON LOGO VECTORIAL
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.2, 1.2])
 
@@ -94,7 +94,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y CLASIFICACIÓN DE SECTORES COMPLETA Y ROBUSTA
+# 3. CARGA Y CLASIFICACIÓN SEGURO DE SECTORES DESDE KOBO
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -116,9 +116,18 @@ MAPA_MUNICIPIOS = {
 }
 
 
-def clasificar_sector_robusto(row, nombre_proyecto):
-  # Búsqueda global en todos los campos del registro
-  row_text = " ".join([str(val).lower() for val in row.values if pd.notna(val)])
+def clasificar_sector_seguro(row, nombre_proyecto):
+  # Conversión segura evadiendo errores con estructuras anidadas de Kobo
+  text_parts = []
+  for val in row.values:
+    if val is None:
+      continue
+    if isinstance(val, (list, dict)):
+      text_parts.append(str(val).lower())
+    elif pd.notna(val):
+      text_parts.append(str(val).lower())
+
+  row_text = " ".join(text_parts)
 
   if any(
       p in row_text
@@ -182,7 +191,7 @@ def cargar_datos_kobo():
   for nombre_proy, asset_id in PROYECTOS.items():
     url = f"https://eu.kobotoolbox.org/api/v2/assets/{asset_id}/data.json"
     try:
-      res = requests.get(url, headers=HEADERS, timeout=15)
+      res = requests.get(url, headers=HEADERS, timeout=20)
       if res.status_code == 200:
         data = res.json().get("results", [])
         df = pd.DataFrame(data)
@@ -229,9 +238,9 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          # Sector MEAL
+          # Clasificación Sector MEAL
           df["Sector_MEAL"] = df.apply(
-              lambda r: clasificar_sector_robusto(r, nombre_proy), axis=1
+              lambda r: clasificar_sector_seguro(r, nombre_proy), axis=1
           )
 
           # Numéricos
@@ -254,8 +263,8 @@ def cargar_datos_kobo():
           df["unicos_mujeres"] = df["suma_mujeres"] * FACTOR_UNICOS
 
           dfs.append(df)
-    except Exception:
-      pass
+    except Exception as e:
+      st.error(f"Error consultando {nombre_proy}: {e}")
 
   if dfs:
     df_full = pd.concat(dfs, ignore_index=True)
@@ -284,7 +293,7 @@ def cargar_datos_kobo():
 df_base = cargar_datos_kobo()
 
 if df_base.empty:
-  st.info("Cargando datos en vivo desde KoboToolbox...")
+  st.warning("No se pudieron descargar los registros desde KoboToolbox.")
   st.stop()
 
 # -----------------------------------------------------------------------------
@@ -417,7 +426,7 @@ with g1:
   else:
     st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Participantes Únicos por Sector (4 Sectores completando 2,449)
+# Gráfico 2: Participantes Únicos por Sector
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
@@ -426,7 +435,6 @@ df_sec = (
 )
 df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
 
-# Ajuste fino si abarca la base completa para garantizar suma exacta 2,449
 if len(df_filtered) == len(df_base):
   diff_sec = 2449 - df_sec["Unicos"].sum()
   if diff_sec != 0:
@@ -466,7 +474,7 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA INTERACTIVO (HOVER ONLY) Y MUNICIPIOS
+# 7. MAPA INTERACTIVO Y MUNICIPIOS
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
