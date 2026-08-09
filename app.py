@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Importar Plotly para el mapa de dispersión interactivo y gráficos de barras
+# Importar Plotly para el mapa interactivo y gráficos de barras
 try:
   import plotly.express as px
 
@@ -56,7 +56,7 @@ COORD_MUNICIPIOS = {
     "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
 }
 
-# Desplazamiento ligero para no solapar puntos de distintos sectores en el mismo municipio
+# Desplazamiento para no solapar puntos de distintos sectores en un mismo municipio
 OFFSETS_GEO = [
     (0.0, 0.0),
     (0.012, 0.012),
@@ -66,7 +66,7 @@ OFFSETS_GEO = [
 ]
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO OFICIAL EN LA ESQUINA SUPERIOR DERECHA
+# 2. ENCABEZADO CON LOGO OFICIAL
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.5, 1])
 
@@ -151,7 +151,7 @@ def cargar_datos_kobo():
         if not df.empty:
           df["Proyecto"] = nombre_proy
 
-          # Normalización de Fecha con soporte UTC
+          # Normalización de Fecha
           col_f = next(
               (
                   c
@@ -167,7 +167,7 @@ def cargar_datos_kobo():
               .astype(str)
           )
 
-          # Limpieza de nombres de Municipio
+          # Limpieza de Municipio
           col_mun = next(
               (c for c in df.columns if "municipio" in c.lower()),
               "Municipio",
@@ -210,7 +210,7 @@ def cargar_datos_kobo():
             else:
               df[col] = 0.0
 
-          # Cálculo de Participantes Únicos
+          # Participantes Únicos
           df["unicos_total"] = df["suma_total"] * FACTOR_UNICOS
           df["unicos_hombres"] = df["suma_hombres"] * FACTOR_UNICOS
           df["unicos_mujeres"] = df["suma_mujeres"] * FACTOR_UNICOS
@@ -422,7 +422,7 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA CON PARTICIPANTES ATENDIDOS Y SECTOR POR PUNTO
+# 7. MAPA SIN LEYENDA (HOVER ONLY) Y BARRAS POR MUNICIPIO
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
@@ -459,10 +459,6 @@ for mun, group in df_map_group.groupby("Municipio"):
             "Participantes_Atendidos": cant,
             "lat": base_lat + d_lat,
             "lon": base_lon + d_lon,
-            "Detalle": (
-                f"{row['Municipio']} | {row['Sector_MEAL']}: {cant:,}"
-                " participantes"
-            ),
         })
 
 df_map_final = pd.DataFrame(map_rows)
@@ -485,7 +481,7 @@ df_mun_bar["Leyenda"] = df_mun_bar.apply(
 )
 
 with col_m1:
-  st.subheader("Mapa: Participantes Atendidos y Sector por Municipio")
+  st.subheader("Ubicación Geográfica por Municipio")
   if not df_map_final.empty and HAS_PLOTLY:
     fig_map = px.scatter_mapbox(
         df_map_final,
@@ -493,22 +489,26 @@ with col_m1:
         lon="lon",
         size="Participantes_Atendidos",
         color="Sector_MEAL",
-        hover_name="Municipio",
-        hover_data={
-            "Participantes_Atendidos": ":,",
-            "Sector_MEAL": True,
-            "lat": False,
-            "lon": False,
-        },
         zoom=8,
         size_max=28,
         color_discrete_sequence=PALETA_COOPI,
         mapbox_style="open-street-map",
     )
+
+    # Configuración de tarjeta flotante (Hover) limpia y sin leyenda
+    fig_map.update_traces(
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>"
+            "Sector: %{customdata[1]}<br>"
+            "Atendidos: <b>%{customdata[2]:,}</b><extra></extra>"
+        ),
+        customdata=df_map_final[
+            ["Municipio", "Sector_MEAL", "Participantes_Atendidos"]
+        ],
+    )
+
     fig_map.update_layout(
-        margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        legend_title_text="Sector MEAL",
-        height=420,
+        margin={"r": 0, "t": 0, "l": 0, "b": 0}, showlegend=False, height=420
     )
     st.plotly_chart(fig_map, use_container_width=True)
   elif not df_map_final.empty:
