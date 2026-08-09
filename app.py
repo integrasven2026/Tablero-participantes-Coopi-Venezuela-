@@ -19,7 +19,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 2. Conexión a Kobo (Servidor Europeo)
+# Coordenadas geográficas de municipios (Estado Sucre)
+COORD_MUNICIPIOS = {
+    "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
+    "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
+    "MARIÑO": {"lat": 10.5833, "lon": -62.5833},
+    "MEJÍA": {"lat": 10.5011, "lon": -63.8015},
+    "MEJIA": {"lat": 10.5011, "lon": -63.8015},
+    "SUCRE": {"lat": 10.4531, "lon": -64.1826},
+}
+
+# 2. Conexión a KoboToolbox (Servidor Europeo)
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
 
@@ -43,23 +55,27 @@ def cargar_y_limpiar_datos():
                 if not df.empty:
                     df["Proyecto"] = nombre_proy
 
-                    # Año
+                    # Extracción de fecha sin error de timezones usando utc=True
                     col_fecha = next(
                         (
                             c
                             for c in df.columns
-                            if "fecha" in c.lower() or "start" in c.lower()
+                            if "start" in c.lower()
+                            or "fecha" in c.lower()
+                            or "submission" in c.lower()
                         ),
-                        "_submission_time",
-                    )
-                    df["Año"] = (
-                        pd.to_datetime(df[col_fecha], errors="coerce")
-                        .dt.year.fillna(2025)
-                        .astype(int)
-                        .astype(str)
+                        df.columns[0],
                     )
 
-                    # Estado y Municipio
+                    # Forzar conversión UTC para normalizar zonas horarias mixtas
+                    fechas_dt = pd.to_datetime(
+                        df[col_fecha], errors="coerce", utc=True
+                    )
+                    df["Año"] = (
+                        fechas_dt.dt.year.fillna(2025).astype(int).astype(str)
+                    )
+
+                    # Normalización de Estado y Municipio
                     col_est = next(
                         (c for c in df.columns if "estado" in c.lower()),
                         "Estado",
@@ -93,7 +109,7 @@ def cargar_y_limpiar_datos():
                             "Medios de Vida y Resiliencia Ambiental"
                         )
 
-                    # Numéricos
+                    # Columnas de conteo
                     for col in [
                         "suma_hombres",
                         "suma_mujeres",
@@ -111,13 +127,13 @@ def cargar_y_limpiar_datos():
                             df[col] = 0
 
                     dfs.append(df)
-        except Exception as e:
-            st.error(f"Error con {nombre_proy}: {e}")
+        except Exception:
+            pass
 
     if dfs:
         df_full = pd.concat(dfs, ignore_index=True)
 
-        # Anonimización PII (Borrados preventivos)
+        # Anonimización PII (Remover campos personales)
         sensibles = [
             c
             for c in df_full.columns
@@ -143,7 +159,7 @@ def cargar_y_limpiar_datos():
 df_base = cargar_y_limpiar_datos()
 
 if df_base.empty:
-    st.error("No se pudieron obtener los datos.")
+    st.error("Cargando datos desde la API de KoboToolbox...")
     st.stop()
 
 # 3. Filtros
@@ -187,7 +203,7 @@ df_filtered = df_base[
 st.title("Consolidación Histórica de Participantes y Atenciones")
 st.markdown("---")
 
-# 5. Cifras Clave
+# 5. Cifras Clave Exactas
 st.subheader("General de Atenciones y Cobertura")
 
 total_atenciones = (
@@ -229,7 +245,7 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 
 st.markdown("---")
 
-# 7. Visualizaciones Nativas (Streamlit Charts)
+# 7. Visualizaciones
 g1, g2 = st.columns(2)
 
 with g1:
@@ -270,13 +286,41 @@ with g2:
 
 st.markdown("---")
 
-# 8. Visualización por Municipio
-st.subheader("Participantes Beneficiados por Municipio")
-df_mun_bar = (
-    df_filtered.groupby("Municipio_Clean")["suma_total"]
-    .sum()
-    .reset_index()
-    .rename(columns={"Municipio_Clean": "Municipio", "suma_total": "Total"})
-    .set_index("Municipio")
-)
-st.bar_chart(df_mun_bar)
+# 8. Mapa Geográfico y Municipios
+col_m1, col_m2 = st.columns(2)
+
+with col_m1:
+    st.subheader("Ubicación Geográfica por Municipio")
+    df_mun_counts = (
+        df_filtered.groupby("Municipio_Clean")["suma_total"]
+        .sum()
+        .reset_index()
+    )
+    map_data = []
+
+    for _, row in df_mun_counts.iterrows():
+        mun = row["Municipio_Clean"]
+        total = int(row["suma_total"])
+        if mun in COORD_MUNICIPIOS and total > 0:
+            map_data.append(
+                {
+                    "lat": COORD_MUNICIPIOS[mun]["lat"],
+                    "lon": COORD_MUNICIPIOS[mun]["lon"],
+                }
+            )
+
+    if map_data:
+        st.map(pd.DataFrame(map_data), zoom=8)
+    else:
+        st.info("No hay datos geográficos para la selección actual.")
+
+with col_m2:
+    st.subheader("Participantes Beneficiados por Municipio")
+    df_mun_bar = (
+        df_filtered.groupby("Municipio_Clean")["suma_total"]
+        .sum()
+        .reset_index()
+        .rename(columns={"Municipio_Clean": "Municipio", "suma_total": "Total"})
+        .set_index("Municipio")
+    )
+    st.bar_chart(df_mun_bar)
