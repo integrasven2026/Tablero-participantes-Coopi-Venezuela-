@@ -1,3 +1,4 @@
+import base64
 import re
 import pandas as pd
 import requests
@@ -44,7 +45,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas base de municipios del Estado Sucre
+# Coordenadas geográficas de municipios de Sucre
 COORD_MUNICIPIOS = {
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
@@ -64,8 +65,16 @@ OFFSETS_GEO = [
     (-0.012, 0.012),
 ]
 
+# Logo Vectorial de COOPI en Base64 para evitar errores de red
+SVG_LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="190" height="50">
+  <text x="5" y="52" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="50" fill="#0082C8" letter-spacing="2">COOPI</text>
+  <text x="7" y="70" font-family="'Segoe UI', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#00A859" letter-spacing="1">COOPERAZIONE INTERNAZIONALE</text>
+</svg>"""
+B64_LOGO = base64.b64encode(SVG_LOGO.encode("utf-8")).decode("utf-8")
+DATA_URI_LOGO = f"data:image/svg+xml;base64,{B64_LOGO}"
+
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO OFICIAL EMBEBIDO
+# 2. ENCABEZADO CON LOGO VECTORIAL INLINE
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.2, 1.2])
 
@@ -74,13 +83,10 @@ with col_tit:
   st.caption("COOPI - Cooperazione Internazionale | Misión Venezuela")
 
 with col_logo:
-  # Logo de COOPI cargado desde enlace web oficial estable
   st.markdown(
-      """
+      f"""
         <div style="text-align: right; padding-top: 10px;">
-            <img src="https://coopi.org/images/logo.png" 
-                 style="max-width: 200px; height: auto;" 
-                 alt="COOPI Logo">
+            <img src="{DATA_URI_LOGO}" style="max-width: 190px; height: auto;" alt="COOPI Logo">
         </div>
         """,
       unsafe_allow_html=True,
@@ -89,7 +95,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y CLASIFICACIÓN RIGUROSA DE SECTORES DESDE KOBO
+# 3. CARGA Y SEPARACIÓN DE SECTORES POR PROYECTO Y COMPONENTE
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -111,47 +117,23 @@ MAPA_MUNICIPIOS = {
 }
 
 
-def clasificar_sector_exacto(row):
+def clasificar_sector_separado(row, nombre_proyecto):
+  comp = str(row.get("Componente:", "")).upper()
   act = str(row.get("Actividad:", "")).lower()
-  comp = str(row.get("Componente:", "")).lower()
-  res = str(row.get("Resultado:", "")).lower()
 
-  if (
-      "sensibiliz" in act
-      or "protecc" in act
-      or "derecho" in act
-      or "campaña" in act
-      or "género" in act
-      or "a22" in act
-      or "a13" in act
-      or "r2" in res
-  ):
-    return "Protección y Sensibilización Comunitaria"
-  elif (
-      "residuo" in comp
-      or "desecho" in act
-      or "recicl" in act
-      or "a33" in act
-      or "a34" in act
-      or "a35" in act
-      or "a36" in act
-  ):
-    return "Gestión Ambiental y Residuos Sólidos"
-  elif "negocio" in act or "pesca" in act or "ingreso" in act or "a.3" in act:
-    return "Medios de Vida y Resiliencia Ambiental"
-  elif (
-      "wash" in comp
-      or "agua" in act
-      or "saneamiento" in act
-      or "hidro" in act
-      or "a11" in act
-      or "a12" in act
-      or "a14" in act
-      or "a24" in act
-      or "a25" in act
-  ):
+  if nombre_proyecto == "Agua para la Vida":
+    if "RESIDUO" in comp or "DESECHO" in comp or "GESTI" in comp:
+      return "Gestión Ambiental y Residuos Sólidos"
     return "Agua, Saneamiento e Higiene (WASH)"
-  else:
+  else:  # Eco Resiliencia Costera
+    if (
+        "negocio" in act
+        or "pesca" in act
+        or "ingreso" in act
+        or "a.3" in act
+        or "a32" in act
+    ):
+      return "Medios de Vida y Resiliencia Ambiental"
     return "Protección y Sensibilización Comunitaria"
 
 
@@ -169,6 +151,7 @@ def cargar_datos_kobo():
         if not df.empty:
           df["Proyecto"] = nombre_proy
 
+          # Fecha
           col_f = next(
               (
                   c
@@ -184,6 +167,7 @@ def cargar_datos_kobo():
               .astype(str)
           )
 
+          # Municipio
           col_mun = next(
               (c for c in df.columns if "municipio" in c.lower()),
               "Municipio",
@@ -195,6 +179,7 @@ def cargar_datos_kobo():
               .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
           )
 
+          # Estado
           col_est = next(
               (c for c in df.columns if "estado" in c.lower()),
               "Estado",
@@ -205,8 +190,12 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          df["Sector_MEAL"] = df.apply(clasificar_sector_exacto, axis=1)
+          # Clasificación Separada
+          df["Sector_MEAL"] = df.apply(
+              lambda r: clasificar_sector_separado(r, nombre_proy), axis=1
+          )
 
+          # Numéricos
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -430,7 +419,7 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA INTERACTIVO Y MUNICIPIOS
+# 7. MAPA INTERACTIVO (HOVER ONLY) Y MUNICIPIOS
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
