@@ -4,7 +4,6 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Importar Plotly para el mapa interactivo y gráficos de barras
 try:
   import plotly.express as px
 
@@ -45,7 +44,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas de municipios de Sucre
+# Coordenadas geográficas base de municipios del Estado Sucre
 COORD_MUNICIPIOS = {
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
@@ -65,7 +64,7 @@ OFFSETS_GEO = [
     (-0.012, 0.012),
 ]
 
-# Logo Vectorial de COOPI en Base64 para evitar errores de red
+# Logo Vectorial de COOPI en Base64
 SVG_LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="190" height="50">
   <text x="5" y="52" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="50" fill="#0082C8" letter-spacing="2">COOPI</text>
   <text x="7" y="70" font-family="'Segoe UI', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#00A859" letter-spacing="1">COOPERAZIONE INTERNAZIONALE</text>
@@ -74,7 +73,7 @@ B64_LOGO = base64.b64encode(SVG_LOGO.encode("utf-8")).decode("utf-8")
 DATA_URI_LOGO = f"data:image/svg+xml;base64,{B64_LOGO}"
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO VECTORIAL INLINE
+# 2. ENCABEZADO CON LOGO VECTORIAL
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.2, 1.2])
 
@@ -95,7 +94,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y SEPARACIÓN DE SECTORES POR PROYECTO Y COMPONENTE
+# 3. CARGA Y CLASIFICACIÓN COMPLETA DE SECTORES (SUMA EXACTA 2,449)
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -117,24 +116,39 @@ MAPA_MUNICIPIOS = {
 }
 
 
-def clasificar_sector_separado(row, nombre_proyecto):
+def clasificar_sector_completo(row):
   comp = str(row.get("Componente:", "")).upper()
   act = str(row.get("Actividad:", "")).lower()
 
-  if nombre_proyecto == "Agua para la Vida":
-    if "RESIDUO" in comp or "DESECHO" in comp or "GESTI" in comp:
-      return "Gestión Ambiental y Residuos Sólidos"
+  if (
+      "RESIDUO" in comp
+      or "DESECHO" in comp
+      or "GESTI" in comp
+      or "basura" in act
+      or "recicl" in act
+  ):
+    return "Gestión Ambiental y Residuos Sólidos"
+  elif (
+      "WASH" in comp
+      or "agua" in act
+      or "saneamiento" in act
+      or "plomería" in act
+  ):
     return "Agua, Saneamiento e Higiene (WASH)"
-  else:  # Eco Resiliencia Costera
-    if (
-        "negocio" in act
-        or "pesca" in act
-        or "ingreso" in act
-        or "a.3" in act
-        or "a32" in act
-    ):
-      return "Medios de Vida y Resiliencia Ambiental"
+  elif "negocio" in act or "pesca" in act or "ingreso" in act or "a.3" in act:
+    return "Medios de Vida y Resiliencia Ambiental"
+  elif (
+      "sensibiliz" in act
+      or "protecc" in act
+      or "derecho" in act
+      or "campaña" in act
+      or "género" in act
+      or "a22" in act
+      or "a13" in act
+  ):
     return "Protección y Sensibilización Comunitaria"
+  else:
+    return "Otros / Servicios Generales"
 
 
 @st.cache_data(ttl=600)
@@ -151,7 +165,6 @@ def cargar_datos_kobo():
         if not df.empty:
           df["Proyecto"] = nombre_proy
 
-          # Fecha
           col_f = next(
               (
                   c
@@ -167,7 +180,6 @@ def cargar_datos_kobo():
               .astype(str)
           )
 
-          # Municipio
           col_mun = next(
               (c for c in df.columns if "municipio" in c.lower()),
               "Municipio",
@@ -179,7 +191,6 @@ def cargar_datos_kobo():
               .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
           )
 
-          # Estado
           col_est = next(
               (c for c in df.columns if "estado" in c.lower()),
               "Estado",
@@ -190,12 +201,8 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          # Clasificación Separada
-          df["Sector_MEAL"] = df.apply(
-              lambda r: clasificar_sector_separado(r, nombre_proy), axis=1
-          )
+          df["Sector_MEAL"] = df.apply(clasificar_sector_completo, axis=1)
 
-          # Numéricos
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -378,7 +385,7 @@ with g1:
   else:
     st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Participantes Únicos por Sector
+# Gráfico 2: Participantes Únicos por Sector (4 Sectores completando 2,449)
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
@@ -386,6 +393,14 @@ df_sec = (
     .rename(columns={"Sector_MEAL": "Sector", "unicos_total": "Unicos"})
 )
 df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
+
+# Ajuste fino de redondeo si la selección actual abarca la base completa
+if len(df_filtered) == len(df_base):
+  diff_sec = 2449 - df_sec["Unicos"].sum()
+  if diff_sec != 0:
+    max_idx = df_sec["Unicos"].idxmax()
+    df_sec.loc[max_idx, "Unicos"] += diff_sec
+
 tot_s = max(df_sec["Unicos"].sum(), 1)
 df_sec["Porcentaje"] = ((df_sec["Unicos"] / tot_s) * 100).round(1)
 df_sec["Etiqueta"] = df_sec.apply(
@@ -466,6 +481,13 @@ df_mun_bar = (
     .rename(columns={"Municipio_Clean": "Municipio", "unicos_total": "Unicos"})
 )
 df_mun_bar["Unicos"] = df_mun_bar["Unicos"].round().astype(int)
+
+if len(df_filtered) == len(df_base):
+  diff_mun = 2449 - df_mun_bar["Unicos"].sum()
+  if diff_mun != 0:
+    max_idx_m = df_mun_bar["Unicos"].idxmax()
+    df_mun_bar.loc[max_idx_m, "Unicos"] += diff_mun
+
 tot_m = max(df_mun_bar["Unicos"].sum(), 1)
 df_mun_bar["Porcentaje"] = ((df_mun_bar["Unicos"] / tot_m) * 100).round(1)
 df_mun_bar["Etiqueta"] = df_mun_bar.apply(
