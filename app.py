@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Importar Plotly para renderizar etiquetas sobre las barras
+# Importar Plotly para el mapa de dispersión interactivo y gráficos de barras
 try:
   import plotly.express as px
 
@@ -31,7 +31,7 @@ PALETA_COOPI = [
     "#059669",
 ]
 
-# Factor global de conversión a Participantes Únicos
+# Factor global de conversión a Participantes Únicos (2,449 / 4,462)
 FACTOR_UNICOS = 2449 / 4462
 
 st.markdown(
@@ -44,7 +44,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas de municipios de Sucre
+# Coordenadas geográficas base de municipios del Estado Sucre
 COORD_MUNICIPIOS = {
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
@@ -55,6 +55,15 @@ COORD_MUNICIPIOS = {
     "BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
     "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
 }
+
+# Desplazamiento ligero para no solapar puntos de distintos sectores en el mismo municipio
+OFFSETS_GEO = [
+    (0.0, 0.0),
+    (0.012, 0.012),
+    (-0.012, -0.012),
+    (0.012, -0.012),
+    (-0.012, 0.012),
+]
 
 # -----------------------------------------------------------------------------
 # 2. ENCABEZADO CON LOGO OFICIAL EN LA ESQUINA SUPERIOR DERECHA
@@ -186,7 +195,7 @@ def cargar_datos_kobo():
               lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
           )
 
-          # Conversión a Participantes Únicos por registro
+          # Conversión numérica
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -201,7 +210,7 @@ def cargar_datos_kobo():
             else:
               df[col] = 0.0
 
-          # Calculamos columnas específicas de Participantes Únicos
+          # Cálculo de Participantes Únicos
           df["unicos_total"] = df["suma_total"] * FACTOR_UNICOS
           df["unicos_hombres"] = df["suma_hombres"] * FACTOR_UNICOS
           df["unicos_mujeres"] = df["suma_mujeres"] * FACTOR_UNICOS
@@ -413,10 +422,52 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA GEOGRÁFICO Y BARRAS POR MUNICIPIO (PARTICIPANTES ÚNICOS)
+# 7. MAPA CON PARTICIPANTES ATENDIDOS Y SECTOR POR PUNTO
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
+# Agrupación por Municipio y Sector MEAL para el mapa
+df_map_group = (
+    df_filtered.groupby(["Municipio_Clean", "Sector_MEAL"])["unicos_total"]
+    .sum()
+    .reset_index()
+    .rename(
+        columns={
+            "Municipio_Clean": "Municipio",
+            "unicos_total": "Participantes_Atendidos",
+        }
+    )
+)
+df_map_group["Participantes_Atendidos"] = (
+    df_map_group["Participantes_Atendidos"].round().astype(int)
+)
+
+map_rows = []
+for mun, group in df_map_group.groupby("Municipio"):
+  mun_upper = str(mun).strip().upper()
+  if mun_upper in COORD_MUNICIPIOS:
+    base_lat = COORD_MUNICIPIOS[mun_upper]["lat"]
+    base_lon = COORD_MUNICIPIOS[mun_upper]["lon"]
+
+    for idx, (_, row) in enumerate(group.iterrows()):
+      cant = int(row["Participantes_Atendidos"])
+      if cant > 0:
+        d_lat, d_lon = OFFSETS_GEO[idx % len(OFFSETS_GEO)]
+        map_rows.append({
+            "Municipio": row["Municipio"],
+            "Sector_MEAL": row["Sector_MEAL"],
+            "Participantes_Atendidos": cant,
+            "lat": base_lat + d_lat,
+            "lon": base_lon + d_lon,
+            "Detalle": (
+                f"{row['Municipio']} | {row['Sector_MEAL']}: {cant:,}"
+                " participantes"
+            ),
+        })
+
+df_map_final = pd.DataFrame(map_rows)
+
+# Datos consolidado para Gráfico de Municipio
 df_mun_bar = (
     df_filtered.groupby("Municipio_Clean")["unicos_total"]
     .sum()
@@ -434,20 +485,34 @@ df_mun_bar["Leyenda"] = df_mun_bar.apply(
 )
 
 with col_m1:
-  st.subheader("Ubicación Geográfica por Municipio")
-  map_data = []
-
-  for _, row in df_mun_bar.iterrows():
-    mun_upper = str(row["Municipio"]).strip().upper()
-    tot = int(row["Unicos"])
-    if mun_upper in COORD_MUNICIPIOS and tot > 0:
-      map_data.append({
-          "lat": COORD_MUNICIPIOS[mun_upper]["lat"],
-          "lon": COORD_MUNICIPIOS[mun_upper]["lon"],
-      })
-
-  if map_data:
-    st.map(pd.DataFrame(map_data), zoom=8)
+  st.subheader("Mapa: Participantes Atendidos y Sector por Municipio")
+  if not df_map_final.empty and HAS_PLOTLY:
+    fig_map = px.scatter_mapbox(
+        df_map_final,
+        lat="lat",
+        lon="lon",
+        size="Participantes_Atendidos",
+        color="Sector_MEAL",
+        hover_name="Municipio",
+        hover_data={
+            "Participantes_Atendidos": ":,",
+            "Sector_MEAL": True,
+            "lat": False,
+            "lon": False,
+        },
+        zoom=8,
+        size_max=28,
+        color_discrete_sequence=PALETA_COOPI,
+        mapbox_style="open-street-map",
+    )
+    fig_map.update_layout(
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+        legend_title_text="Sector MEAL",
+        height=420,
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
+  elif not df_map_final.empty:
+    st.map(df_map_final[["lat", "lon"]])
   else:
     st.info("No hay datos geográficos para la selección actual.")
 
