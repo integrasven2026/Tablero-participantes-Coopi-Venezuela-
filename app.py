@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Importar Plotly para gráficos interactivos con etiquetas sobre las barras
+# Importar Plotly para renderizar etiquetas sobre las barras
 try:
   import plotly.express as px
 
@@ -12,7 +12,7 @@ except ImportError:
   HAS_PLOTLY = False
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y PALETA DE COLORES COOPI
+# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Consolidación Histórica de Participantes - COOPI",
@@ -31,6 +31,9 @@ PALETA_COOPI = [
     "#059669",
 ]
 
+# Factor global de conversión a Participantes Únicos
+FACTOR_UNICOS = 2449 / 4462
+
 st.markdown(
     """
     <style>
@@ -41,7 +44,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas exactas de los municipios del Estado Sucre
+# Coordenadas geográficas de municipios de Sucre
 COORD_MUNICIPIOS = {
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
@@ -54,7 +57,7 @@ COORD_MUNICIPIOS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO OFICIAL
+# 2. ENCABEZADO CON LOGO OFICIAL EN LA ESQUINA SUPERIOR DERECHA
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.5, 1])
 
@@ -183,7 +186,7 @@ def cargar_datos_kobo():
               lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
           )
 
-          # Conversión numérica de participantes
+          # Conversión a Participantes Únicos por registro
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -193,10 +196,15 @@ def cargar_datos_kobo():
           ]:
             if col in df.columns:
               df[col] = (
-                  pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+                  pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
               )
             else:
-              df[col] = 0
+              df[col] = 0.0
+
+          # Calculamos columnas específicas de Participantes Únicos
+          df["unicos_total"] = df["suma_total"] * FACTOR_UNICOS
+          df["unicos_hombres"] = df["suma_hombres"] * FACTOR_UNICOS
+          df["unicos_mujeres"] = df["suma_mujeres"] * FACTOR_UNICOS
 
           dfs.append(df)
     except Exception:
@@ -273,15 +281,15 @@ df_filtered = df_base[
 ]
 
 # -----------------------------------------------------------------------------
-# 5. GENERAL DE ATENCIONES Y COBERTURA
+# 5. GENERAL DE ATENCIONES Y COBERTURA (PARTICIPANTES ÚNICOS)
 # -----------------------------------------------------------------------------
 st.subheader("General de Atenciones y Cobertura")
 
-total_atenciones = (
-    4462 if len(df_filtered) == len(df_base) else int(df_filtered["suma_total"].sum())
-)
+total_atenciones = int(round(df_filtered["suma_total"].sum()))
 unicos_participantes = (
-    2449 if len(df_filtered) == len(df_base) else int(total_atenciones * 0.5488)
+    2449
+    if len(df_filtered) == len(df_base)
+    else int(round(df_filtered["unicos_total"].sum()))
 )
 
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -307,14 +315,14 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 6. GRÁFICOS DE BARRAS CON VALOR ABSOLUTO Y PORCENTAJE
+# 6. GRÁFICOS DE BARRAS EN PARTICIPANTES ÚNICOS (VALOR ABSOLUTO Y %)
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
 
-tot_h = df_filtered["suma_hombres"].sum()
-tot_m = df_filtered["suma_mujeres"].sum()
+tot_h_u = df_filtered["unicos_hombres"].sum()
+tot_m_u = df_filtered["unicos_mujeres"].sum()
 
-# Gráfico 1: Edad y Sexo
+# Gráfico 1: Edad y Sexo (Únicos)
 df_etario = pd.DataFrame({
     "Grupo Etario": [
         "Niños/Niñas (0-17)",
@@ -325,28 +333,28 @@ df_etario = pd.DataFrame({
         "Adultos Mayores (60+)",
     ],
     "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre", "Mujer"],
-    "Total": [
-        int(tot_h * 0.02),
-        int(tot_m * 0.02),
-        int(tot_h * 0.88),
-        int(tot_m * 0.88),
-        int(tot_h * 0.10),
-        int(tot_m * 0.10),
+    "Unicos": [
+        int(round(tot_h_u * 0.02)),
+        int(round(tot_m_u * 0.02)),
+        int(round(tot_h_u * 0.88)),
+        int(round(tot_m_u * 0.88)),
+        int(round(tot_h_u * 0.10)),
+        int(round(tot_m_u * 0.10)),
     ],
 })
-tot_et = max(df_etario["Total"].sum(), 1)
-df_etario["Porcentaje"] = ((df_etario["Total"] / tot_et) * 100).round(1)
+tot_et = max(df_etario["Unicos"].sum(), 1)
+df_etario["Porcentaje"] = ((df_etario["Unicos"] / tot_et) * 100).round(1)
 df_etario["Etiqueta"] = df_etario.apply(
-    lambda r: f"{r['Total']:,} ({r['Porcentaje']}%)", axis=1
+    lambda r: f"{r['Unicos']:,} ({r['Porcentaje']}%)", axis=1
 )
 
 with g1:
-  st.subheader("Desglose por Sexo y Rango Etario")
+  st.subheader("Desglose por Sexo y Rango Etario (Únicos)")
   if HAS_PLOTLY:
     fig_et = px.bar(
         df_etario,
         x="Grupo Etario",
-        y="Total",
+        y="Unicos",
         color="Sexo",
         barmode="group",
         text="Etiqueta",
@@ -356,34 +364,35 @@ with g1:
         textposition="outside", textfont=dict(size=12, color="#1F2937")
     )
     fig_et.update_layout(
-        yaxis_title="Cantidad de Participantes",
-        yaxis=dict(range=[0, max(df_etario["Total"].max() * 1.25, 10)]),
+        yaxis_title="Participantes Únicos",
+        yaxis=dict(range=[0, max(df_etario["Unicos"].max() * 1.25, 10)]),
         height=420,
     )
     st.plotly_chart(fig_et, use_container_width=True)
   else:
-    st.bar_chart(df_etario.set_index("Grupo Etario")["Total"])
+    st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Sectores MEAL
+# Gráfico 2: Sectores MEAL (Únicos)
 df_sec = (
-    df_filtered.groupby("Sector_MEAL")["suma_total"]
+    df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
     .reset_index()
-    .rename(columns={"Sector_MEAL": "Sector", "suma_total": "Total"})
+    .rename(columns={"Sector_MEAL": "Sector", "unicos_total": "Unicos"})
 )
-tot_s = max(df_sec["Total"].sum(), 1)
-df_sec["Porcentaje"] = ((df_sec["Total"] / tot_s) * 100).round(1)
+df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
+tot_s = max(df_sec["Unicos"].sum(), 1)
+df_sec["Porcentaje"] = ((df_sec["Unicos"] / tot_s) * 100).round(1)
 df_sec["Etiqueta"] = df_sec.apply(
-    lambda r: f"{r['Total']:,} ({r['Porcentaje']}%)", axis=1
+    lambda r: f"{r['Unicos']:,} ({r['Porcentaje']}%)", axis=1
 )
 
 with g2:
-  st.subheader("Participantes por Sector de Respuesta MEAL")
+  st.subheader("Participantes Únicos por Sector MEAL")
   if HAS_PLOTLY:
     fig_s = px.bar(
         df_sec,
         x="Sector",
-        y="Total",
+        y="Unicos",
         text="Etiqueta",
         color="Sector",
         color_discrete_sequence=PALETA_COOPI,
@@ -392,35 +401,36 @@ with g2:
         textposition="outside", textfont=dict(size=12, color="#1F2937")
     )
     fig_s.update_layout(
-        yaxis_title="Cantidad de Participantes",
-        yaxis=dict(range=[0, max(df_sec["Total"].max() * 1.25, 10)]),
+        yaxis_title="Participantes Únicos",
+        yaxis=dict(range=[0, max(df_sec["Unicos"].max() * 1.25, 10)]),
         showlegend=False,
         height=420,
     )
     st.plotly_chart(fig_s, use_container_width=True)
   else:
-    st.bar_chart(df_sec.set_index("Sector")["Total"])
+    st.bar_chart(df_sec.set_index("Sector")["Unicos"])
 
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA GEOGRÁFICO CORREGIDO Y BARRAS POR MUNICIPIO
+# 7. MAPA GEOGRÁFICO Y BARRAS POR MUNICIPIO (PARTICIPANTES ÚNICOS)
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
 df_mun_bar = (
-    df_filtered.groupby("Municipio_Clean")["suma_total"]
+    df_filtered.groupby("Municipio_Clean")["unicos_total"]
     .sum()
     .reset_index()
-    .rename(columns={"Municipio_Clean": "Municipio", "suma_total": "Total"})
+    .rename(columns={"Municipio_Clean": "Municipio", "unicos_total": "Unicos"})
 )
-tot_m = max(df_mun_bar["Total"].sum(), 1)
-df_mun_bar["Porcentaje"] = ((df_mun_bar["Total"] / tot_m) * 100).round(1)
+df_mun_bar["Unicos"] = df_mun_bar["Unicos"].round().astype(int)
+tot_m = max(df_mun_bar["Unicos"].sum(), 1)
+df_mun_bar["Porcentaje"] = ((df_mun_bar["Unicos"] / tot_m) * 100).round(1)
 df_mun_bar["Etiqueta"] = df_mun_bar.apply(
-    lambda r: f"{r['Total']:,} ({r['Porcentaje']}%)", axis=1
+    lambda r: f"{r['Unicos']:,} ({r['Porcentaje']}%)", axis=1
 )
 df_mun_bar["Leyenda"] = df_mun_bar.apply(
-    lambda r: f"{r['Municipio']}: {r['Total']:,} ({r['Porcentaje']}%)", axis=1
+    lambda r: f"{r['Municipio']}: {r['Unicos']:,} ({r['Porcentaje']}%)", axis=1
 )
 
 with col_m1:
@@ -429,7 +439,7 @@ with col_m1:
 
   for _, row in df_mun_bar.iterrows():
     mun_upper = str(row["Municipio"]).strip().upper()
-    tot = int(row["Total"])
+    tot = int(row["Unicos"])
     if mun_upper in COORD_MUNICIPIOS and tot > 0:
       map_data.append({
           "lat": COORD_MUNICIPIOS[mun_upper]["lat"],
@@ -442,12 +452,12 @@ with col_m1:
     st.info("No hay datos geográficos para la selección actual.")
 
 with col_m2:
-  st.subheader("Participantes Beneficiados por Municipio")
+  st.subheader("Participantes Únicos por Municipio")
   if HAS_PLOTLY:
     fig_m = px.bar(
         df_mun_bar,
         x="Municipio",
-        y="Total",
+        y="Unicos",
         color="Leyenda",
         text="Etiqueta",
         color_discrete_sequence=PALETA_COOPI,
@@ -456,11 +466,11 @@ with col_m2:
         textposition="outside", textfont=dict(size=12, color="#1F2937")
     )
     fig_m.update_layout(
-        legend_title_text="Municipio | Total (%)",
-        yaxis_title="Cantidad de Participantes",
-        yaxis=dict(range=[0, max(df_mun_bar["Total"].max() * 1.25, 10)]),
+        legend_title_text="Municipio | Únicos (%)",
+        yaxis_title="Participantes Únicos",
+        yaxis=dict(range=[0, max(df_mun_bar["Unicos"].max() * 1.25, 10)]),
         height=420,
     )
     st.plotly_chart(fig_m, use_container_width=True)
   else:
-    st.bar_chart(df_mun_bar.set_index("Municipio")["Total"])
+    st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
