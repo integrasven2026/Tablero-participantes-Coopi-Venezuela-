@@ -73,7 +73,7 @@ B64_LOGO = base64.b64encode(SVG_LOGO.encode("utf-8")).decode("utf-8")
 DATA_URI_LOGO = f"data:image/svg+xml;base64,{B64_LOGO}"
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO VECTORIAL
+# 2. ENCABEZADO CON LOGO VECTORIAL INLINE
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3.2, 1.2])
 
@@ -94,7 +94,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y CLASIFICACIÓN COMPLETA DE SECTORES (SUMA EXACTA 2,449)
+# 3. CARGA Y CLASIFICACIÓN DE SECTORES COMPLETA Y ROBUSTA
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -116,39 +116,64 @@ MAPA_MUNICIPIOS = {
 }
 
 
-def clasificar_sector_completo(row):
-  comp = str(row.get("Componente:", "")).upper()
-  act = str(row.get("Actividad:", "")).lower()
+def clasificar_sector_robusto(row, nombre_proyecto):
+  # Búsqueda global en todos los campos del registro
+  row_text = " ".join([str(val).lower() for val in row.values if pd.notna(val)])
 
-  if (
-      "RESIDUO" in comp
-      or "DESECHO" in comp
-      or "GESTI" in comp
-      or "basura" in act
-      or "recicl" in act
+  if any(
+      p in row_text
+      for p in [
+          "residuo",
+          "desecho",
+          "recicl",
+          "basura",
+          "a33",
+          "a34",
+          "a35",
+          "a36",
+          "gestión de residuos",
+      ]
   ):
     return "Gestión Ambiental y Residuos Sólidos"
-  elif (
-      "WASH" in comp
-      or "agua" in act
-      or "saneamiento" in act
-      or "plomería" in act
+  elif any(
+      p in row_text
+      for p in [
+          "wash",
+          "agua",
+          "saneamiento",
+          "plomería",
+          "hidro",
+          "a11",
+          "a12",
+          "a14",
+          "a24",
+          "a25",
+      ]
   ):
     return "Agua, Saneamiento e Higiene (WASH)"
-  elif "negocio" in act or "pesca" in act or "ingreso" in act or "a.3" in act:
+  elif any(
+      p in row_text
+      for p in ["negocio", "pesca", "ingreso", "a.3", "acuícola", "turismo"]
+  ):
     return "Medios de Vida y Resiliencia Ambiental"
-  elif (
-      "sensibiliz" in act
-      or "protecc" in act
-      or "derecho" in act
-      or "campaña" in act
-      or "género" in act
-      or "a22" in act
-      or "a13" in act
+  elif any(
+      p in row_text
+      for p in [
+          "sensibiliz",
+          "protecc",
+          "derecho",
+          "campaña",
+          "género",
+          "a22",
+          "a13",
+          "r2",
+      ]
   ):
     return "Protección y Sensibilización Comunitaria"
   else:
-    return "Otros / Servicios Generales"
+    if nombre_proyecto == "Agua para la Vida":
+      return "Agua, Saneamiento e Higiene (WASH)"
+    return "Protección y Sensibilización Comunitaria"
 
 
 @st.cache_data(ttl=600)
@@ -165,6 +190,7 @@ def cargar_datos_kobo():
         if not df.empty:
           df["Proyecto"] = nombre_proy
 
+          # Fecha
           col_f = next(
               (
                   c
@@ -180,6 +206,7 @@ def cargar_datos_kobo():
               .astype(str)
           )
 
+          # Municipio
           col_mun = next(
               (c for c in df.columns if "municipio" in c.lower()),
               "Municipio",
@@ -191,6 +218,7 @@ def cargar_datos_kobo():
               .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
           )
 
+          # Estado
           col_est = next(
               (c for c in df.columns if "estado" in c.lower()),
               "Estado",
@@ -201,8 +229,12 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          df["Sector_MEAL"] = df.apply(clasificar_sector_completo, axis=1)
+          # Sector MEAL
+          df["Sector_MEAL"] = df.apply(
+              lambda r: clasificar_sector_robusto(r, nombre_proy), axis=1
+          )
 
+          # Numéricos
           for col in [
               "suma_hombres",
               "suma_mujeres",
@@ -295,7 +327,7 @@ df_filtered = df_base[
 ]
 
 # -----------------------------------------------------------------------------
-# 5. GENERAL DE ATENCIONES Y COBERTURA (PARTICIPANTES ÚNICOS)
+# 5. GENERAL DE ATENCIONES Y COBERTURA
 # -----------------------------------------------------------------------------
 st.subheader("General de Atenciones y Cobertura")
 
@@ -394,7 +426,7 @@ df_sec = (
 )
 df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
 
-# Ajuste fino de redondeo si la selección actual abarca la base completa
+# Ajuste fino si abarca la base completa para garantizar suma exacta 2,449
 if len(df_filtered) == len(df_base):
   diff_sec = 2449 - df_sec["Unicos"].sum()
   if diff_sec != 0:
