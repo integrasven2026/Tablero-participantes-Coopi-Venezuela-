@@ -1,5 +1,4 @@
 import pandas as pd
-import plotly.express as px
 import requests
 import streamlit as st
 
@@ -20,7 +19,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 2. Conexión y carga de datos desde Kobo (Servidor Europeo)
+# 2. Conexión a Kobo (Servidor Europeo)
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
 
@@ -44,7 +43,7 @@ def cargar_y_limpiar_datos():
                 if not df.empty:
                     df["Proyecto"] = nombre_proy
 
-                    # Extraer Año
+                    # Año
                     col_fecha = next(
                         (
                             c
@@ -60,7 +59,7 @@ def cargar_y_limpiar_datos():
                         .astype(str)
                     )
 
-                    # Estandarizar Estado y Municipio
+                    # Estado y Municipio
                     col_est = next(
                         (c for c in df.columns if "estado" in c.lower()),
                         "Estado",
@@ -94,7 +93,7 @@ def cargar_y_limpiar_datos():
                             "Medios de Vida y Resiliencia Ambiental"
                         )
 
-                    # Variables numéricas de participantes
+                    # Numéricos
                     for col in [
                         "suma_hombres",
                         "suma_mujeres",
@@ -118,7 +117,7 @@ def cargar_y_limpiar_datos():
     if dfs:
         df_full = pd.concat(dfs, ignore_index=True)
 
-        # Anonimización PII (Eliminar datos sensibles)
+        # Anonimización PII (Borrados preventivos)
         sensibles = [
             c
             for c in df_full.columns
@@ -144,7 +143,7 @@ def cargar_y_limpiar_datos():
 df_base = cargar_y_limpiar_datos()
 
 if df_base.empty:
-    st.error("No se pudieron obtener los datos desde KoboToolbox.")
+    st.error("No se pudieron obtener los datos.")
     st.stop()
 
 # 3. Filtros
@@ -188,7 +187,7 @@ df_filtered = df_base[
 st.title("Consolidación Histórica de Participantes y Atenciones")
 st.markdown("---")
 
-# 5. Cifras Clave Exactas
+# 5. Cifras Clave
 st.subheader("General de Atenciones y Cobertura")
 
 total_atenciones = (
@@ -207,79 +206,54 @@ c5.metric("Sectores MEAL", df_filtered["Sector_MEAL"].nunique())
 
 st.markdown("---")
 
-# 6. Vulnerabilidad (%)
+# 6. Vulnerabilidades
 st.subheader("Distribución de Participantes por Grupos de Vulnerabilidad (%)")
 
 tot_h = df_filtered["suma_hombres"].sum()
 tot_m = df_filtered["suma_mujeres"].sum()
 tot_p = max(tot_h + tot_m, 1)
 
-pct_mujeres = round((tot_m / tot_p) * 100, 1)
-pct_hombres = round((tot_h / tot_p) * 100, 1)
-pct_ninios = round((df_filtered["suma_total"].sum() * 0.013) / tot_p * 100, 1)
-pct_disc = round(
-    (df_filtered["calculo_con_dicapacidad"].sum() / tot_p) * 100, 1
-)
-
 v1, v2, v3, v4, v5, v6 = st.columns(6)
-v1.metric("% Mujeres", f"{pct_mujeres}%")
-v2.metric("% Hombres", f"{pct_hombres}%")
-v3.metric("% Niñas y Niños", f"{pct_ninios}%")
-v4.metric("% Discapacidad", f"{pct_disc}%")
+v1.metric("% Mujeres", f"{round((tot_m / tot_p) * 100, 1)}%")
+v2.metric("% Hombres", f"{round((tot_h / tot_p) * 100, 1)}%")
+v3.metric(
+    "% Niñas y Niños",
+    f"{round((df_filtered['suma_total'].sum() * 0.013) / tot_p * 100, 1)}%",
+)
+v4.metric(
+    "% Discapacidad",
+    f"{round((df_filtered['calculo_con_dicapacidad'].sum() / tot_p) * 100, 1)}%",
+)
 v5.metric("% Indígenas", "0.0%")
 v6.metric("% Embarazadas/Lact.", "0.0%")
 
 st.markdown("---")
 
-# 7. Gráficos
+# 7. Visualizaciones Nativas (Streamlit Charts)
 g1, g2 = st.columns(2)
 
 with g1:
     st.subheader("Desglose por Sexo y Rango Etario")
-    data_etario = pd.DataFrame(
+    df_etario = pd.DataFrame(
         {
             "Grupo Etario": [
                 "Niños/Niñas (0-17)",
-                "Niños/Niñas (0-17)",
                 "Adultos (18-59)",
-                "Adultos (18-59)",
-                "Adultos Mayores (60+)",
                 "Adultos Mayores (60+)",
             ],
-            "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre", "Mujer"],
-            "Valor Absoluto": [
+            "Hombres": [
                 int(tot_h * 0.02),
-                int(tot_m * 0.02),
                 int(tot_h * 0.88),
-                int(tot_m * 0.88),
                 int(tot_h * 0.10),
+            ],
+            "Mujeres": [
+                int(tot_m * 0.02),
+                int(tot_m * 0.88),
                 int(tot_m * 0.10),
             ],
         }
-    )
-    tot_g = max(data_etario["Valor Absoluto"].sum(), 1)
-    data_etario["Porcentaje"] = (
-        (data_etario["Valor Absoluto"] / tot_g) * 100
-    ).round(1)
-    data_etario["Etiqueta"] = (
-        data_etario["Valor Absoluto"].astype(str)
-        + " ("
-        + data_etario["Porcentaje"].astype(str)
-        + "%)"
-    )
-
-    fig_bar = px.bar(
-        data_etario,
-        x="Grupo Etario",
-        y="Valor Absoluto",
-        color="Sexo",
-        barmode="group",
-        text="Etiqueta",
-        color_discrete_sequence=["#2b5c8f", "#d95f02"],
-    )
-    fig_bar.update_traces(textposition="outside")
-    fig_bar.update_layout(height=400)
-    st.plotly_chart(fig_bar, use_container_width=True)
+    ).set_index("Grupo Etario")
+    st.bar_chart(df_etario)
 
 with g2:
     st.subheader("Participantes por Sector de Respuesta MEAL")
@@ -290,47 +264,19 @@ with g2:
         .rename(
             columns={"Sector_MEAL": "Sector", "suma_total": "Participantes"}
         )
+        .set_index("Sector")
     )
-    fig_pie = px.pie(
-        df_sec,
-        names="Sector",
-        values="Participantes",
-        hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Set2,
-    )
-    fig_pie.update_traces(textinfo="percent+label")
-    fig_pie.update_layout(height=400)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.bar_chart(df_sec)
 
 st.markdown("---")
 
-# 8. Gráfico por Municipio
+# 8. Visualización por Municipio
 st.subheader("Participantes Beneficiados por Municipio")
 df_mun_bar = (
     df_filtered.groupby("Municipio_Clean")["suma_total"]
     .sum()
     .reset_index()
     .rename(columns={"Municipio_Clean": "Municipio", "suma_total": "Total"})
+    .set_index("Municipio")
 )
-tot_mun = max(df_mun_bar["Total"].sum(), 1)
-df_mun_bar["Porcentaje"] = ((df_mun_bar["Total"] / tot_mun) * 100).round(1)
-df_mun_bar["Etiqueta"] = (
-    df_mun_bar["Total"].astype(str)
-    + " ("
-    + df_mun_bar["Porcentaje"].astype(str)
-    + "%)"
-)
-
-fig_mun = px.bar(
-    df_mun_bar,
-    x="Municipio",
-    y="Total",
-    text="Etiqueta",
-    color="Municipio",
-    color_discrete_sequence=px.colors.qualitative.Safe,
-)
-fig_mun.update_traces(textposition="outside")
-fig_mun.update_layout(
-    yaxis_title="Cantidad de Participantes", showlegend=False, height=400
-)
-st.plotly_chart(fig_mun, use_container_width=True)
+st.bar_chart(df_mun_bar)
