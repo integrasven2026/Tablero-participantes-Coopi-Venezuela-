@@ -56,7 +56,6 @@ COORD_MUNICIPIOS = {
     "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
 }
 
-# Desplazamiento para no solapar puntos de distintos sectores en un mismo municipio
 OFFSETS_GEO = [
     (0.0, 0.0),
     (0.012, 0.012),
@@ -89,7 +88,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y CLASIFICACIÓN DE DATOS DESDE KOBO
+# 3. CARGA Y CLASIFICACIÓN RIGUROSA DE SECTORES DESDE KOBO
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -111,30 +110,49 @@ MAPA_MUNICIPIOS = {
 }
 
 
-def clasificar_sector_meal(row, nombre_proyecto):
-  comp = str(row.get("Componente:", "")).upper()
+def clasificar_sector_exacto(row):
   act = str(row.get("Actividad:", "")).lower()
+  comp = str(row.get("Componente:", "")).lower()
   res = str(row.get("Resultado:", "")).lower()
 
+  # Detección explícita de Protección y Sensibilización Comunitaria
   if (
       "sensibiliz" in act
-      or "derechos" in act
       or "protecc" in act
+      or "derecho" in act
       or "campaña" in act
       or "género" in act
+      or "a22" in act
+      or "a13" in act
       or "r2" in res
   ):
     return "Protección y Sensibilización Comunitaria"
-  elif "residuo" in comp or "desecho" in act or "recicl" in act:
+  elif (
+      "residuo" in comp
+      or "desecho" in act
+      or "recicl" in act
+      or "a33" in act
+      or "a34" in act
+      or "a35" in act
+      or "a36" in act
+  ):
     return "Gestión Ambiental y Residuos Sólidos"
-  elif "negocio" in act or "pesca" in act or "ingreso" in act or "r3" in res:
+  elif "negocio" in act or "pesca" in act or "ingreso" in act or "a.3" in act:
     return "Medios de Vida y Resiliencia Ambiental"
-  elif "wash" in comp or "agua" in act or "saneamiento" in act or "hidro" in act:
+  elif (
+      "wash" in comp
+      or "agua" in act
+      or "saneamiento" in act
+      or "hidro" in act
+      or "a11" in act
+      or "a12" in act
+      or "a14" in act
+      or "a24" in act
+      or "a25" in act
+  ):
     return "Agua, Saneamiento e Higiene (WASH)"
   else:
-    if nombre_proyecto == "Agua para la Vida":
-      return "Agua, Saneamiento e Higiene (WASH)"
-    return "Medios de Vida y Resiliencia Ambiental"
+    return "Protección y Sensibilización Comunitaria"
 
 
 @st.cache_data(ttl=600)
@@ -190,10 +208,8 @@ def cargar_datos_kobo():
               else "Sucre"
           )
 
-          # Clasificación Dinámica MEAL
-          df["Sector_MEAL"] = df.apply(
-              lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
-          )
+          # Clasificación Sectorial MEAL
+          df["Sector_MEAL"] = df.apply(clasificar_sector_exacto, axis=1)
 
           # Conversión numérica
           for col in [
@@ -310,7 +326,6 @@ c5.metric("Sectores MEAL", df_filtered["Sector_MEAL"].nunique())
 
 st.markdown("---")
 
-# Vulnerabilidad calculada sobre Participantes Únicos
 st.subheader("Distribución de Participantes por Grupos de Vulnerabilidad (%)")
 
 v1, v2, v3, v4, v5, v6 = st.columns(6)
@@ -324,14 +339,14 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 6. GRÁFICOS DE BARRAS EN PARTICIPANTES ÚNICOS (VALOR ABSOLUTO Y %)
+# 6. GRÁFICOS DE BARRAS EN PARTICIPANTES ÚNICOS
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
 
 tot_h_u = df_filtered["unicos_hombres"].sum()
 tot_m_u = df_filtered["unicos_mujeres"].sum()
 
-# Gráfico 1: Edad y Sexo (Únicos)
+# Gráfico 1: Edad y Sexo
 df_etario = pd.DataFrame({
     "Grupo Etario": [
         "Niños/Niñas (0-17)",
@@ -381,7 +396,7 @@ with g1:
   else:
     st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Sectores MEAL (Únicos)
+# Gráfico 2: Sectores (Título Modificado: Participantes Únicos por Sector)
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
@@ -396,7 +411,7 @@ df_sec["Etiqueta"] = df_sec.apply(
 )
 
 with g2:
-  st.subheader("Participantes Únicos por Sector MEAL")
+  st.subheader("Participantes Únicos por Sector")
   if HAS_PLOTLY:
     fig_s = px.bar(
         df_sec,
@@ -422,11 +437,10 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA SIN LEYENDA (HOVER ONLY) Y BARRAS POR MUNICIPIO
+# 7. MAPA INTERACTIVO (HOVER ONLY, SIN LEYENDA) Y MUNICIPIOS
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
-# Agrupación por Municipio y Sector MEAL para el mapa
 df_map_group = (
     df_filtered.groupby(["Municipio_Clean", "Sector_MEAL"])["unicos_total"]
     .sum()
@@ -463,7 +477,6 @@ for mun, group in df_map_group.groupby("Municipio"):
 
 df_map_final = pd.DataFrame(map_rows)
 
-# Datos consolidado para Gráfico de Municipio
 df_mun_bar = (
     df_filtered.groupby("Municipio_Clean")["unicos_total"]
     .sum()
@@ -495,7 +508,6 @@ with col_m1:
         mapbox_style="open-street-map",
     )
 
-    # Configuración de tarjeta flotante (Hover) limpia y sin leyenda
     fig_map.update_traces(
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
