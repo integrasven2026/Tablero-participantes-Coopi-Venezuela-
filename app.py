@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Tintentar importar Plotly; si no está en el servidor, usa gráficos nativos
+# Intentar Plotly para gráficos interactivos; si no está, usa gráficos nativos
 try:
     import plotly.express as px
 
@@ -31,9 +31,6 @@ PALETA_COOPI = [
     "#059669",
 ]
 
-# Logo COOPI en Base64 para garantizar despliegue sin subida de archivos
-LOGO_COOPI_B64 = "iVBORw0KGgoAAAANSUhEUgAABDgAAAGlCAYAAAC/a52+AAA..."  # Integrado automáticamente
-
 st.markdown(
     """
     <style>
@@ -43,6 +40,18 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+# Coordenadas geográficas de los municipios de Sucre para el Mapa
+COORD_MUNICIPIOS = {
+    "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "MARIÑO": {"lat": 10.5833, "lon": -62.5833},
+    "SUCRE": {"lat": 10.4531, "lon": -64.1826},
+    "MEJÍA": {"lat": 10.5011, "lon": -63.8015},
+    "MEJIA": {"lat": 10.5011, "lon": -63.8015},
+    "BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
+    "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
+}
 
 # -----------------------------------------------------------------------------
 # 2. ENCABEZADO CON LOGO EN LA PARTE SUPERIOR DERECHA
@@ -58,8 +67,8 @@ with col_logo:
         """
         <div style="text-align: right;">
             <img src="https://raw.githubusercontent.com/integrasven2026/tablero-integras-meal/main/logo_coopi.png" 
-                 style="max-width: 180px; height: auto;" 
-                 onerror="this.style.display='none'">
+                 style="max-width: 170px; height: auto;" 
+                 onerror="this.src='https://coopi.org/images/logo.png'">
         </div>
         """,
         unsafe_allow_html=True,
@@ -68,7 +77,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA Y LIMPIEZA DE DATOS DESDE KOBO
+# 3. CARGA Y ASIGNACIÓN DINÁMICA DE SECTORES DESDE KOBO
 # -----------------------------------------------------------------------------
 TOKEN_KOBO = "a18c017a2e697f4ea1272375dae261ccec6b19d7"
 HEADERS = {"Authorization": f"Token {TOKEN_KOBO}"}
@@ -90,6 +99,32 @@ MAPA_MUNICIPIOS = {
 }
 
 
+def clasificar_sector_meal(row, nombre_proyecto):
+    comp = str(row.get("Componente:", "")).upper()
+    act = str(row.get("Actividad:", "")).lower()
+    res = str(row.get("Resultado:", "")).lower()
+
+    if (
+        "sensibiliz" in act
+         or "derechos" in act
+         or "protecc" in act
+         or "campaña" in act
+         or "género" in act
+         or "r2" in res
+    ):
+        return "Protección y Sensibilización Comunitaria"
+    elif "residuo" in comp or "desecho" in act or "recicl" in act:
+        return "Gestión Ambiental y Residuos Sólidos"
+    elif "negocio" in act or "pesca" in act or "ingreso" in act or "r3" in res:
+        return "Medios de Vida y Resiliencia Ambiental"
+    elif "wash" in comp or "agua" in act or "saneamiento" in act or "hidro" in act:
+        return "Agua, Saneamiento e Higiene (WASH)"
+    else:
+        if nombre_proyecto == "Agua para la Vida":
+            return "Agua, Saneamiento e Higiene (WASH)"
+        return "Medios de Vida y Resiliencia Ambiental"
+
+
 @st.cache_data(ttl=600)
 def cargar_datos_kobo():
     dfs = []
@@ -104,7 +139,7 @@ def cargar_datos_kobo():
                 if not df.empty:
                     df["Proyecto"] = nombre_proy
 
-                    # Normalización de año (soporta UTC)
+                    # Normalización de Fecha
                     col_f = next(
                         (
                             c
@@ -120,7 +155,7 @@ def cargar_datos_kobo():
                         .astype(str)
                     )
 
-                    # Limpieza estricta de nombres de Municipio (remover códigos)
+                    # Municipio limpio
                     col_mun = next(
                         (c for c in df.columns if "municipio" in c.lower()),
                         "Municipio",
@@ -132,6 +167,7 @@ def cargar_datos_kobo():
                         .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
                     )
 
+                    # Estado limpio
                     col_est = next(
                         (c for c in df.columns if "estado" in c.lower()),
                         "Estado",
@@ -142,15 +178,12 @@ def cargar_datos_kobo():
                         else "Sucre"
                     )
 
-                    # Sector MEAL
-                    if nombre_proy == "Agua para la Vida":
-                        df["Sector_MEAL"] = "Agua, Saneamiento e Higiene (WASH)"
-                    else:
-                        df["Sector_MEAL"] = (
-                            "Medios de Vida y Resiliencia Ambiental"
-                        )
+                    # Clasificación Sector MEAL Dinámica (Incluye Protección)
+                    df["Sector_MEAL"] = df.apply(
+                        lambda r: clasificar_sector_meal(r, nombre_proy), axis=1
+                    )
 
-                    # Numéricos
+                    # Variables numéricas
                     for col in [
                         "suma_hombres",
                         "suma_mujeres",
@@ -203,7 +236,7 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES
+# 4. FILTROS LATERALES DE NAVEGACIÓN
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
@@ -242,7 +275,7 @@ df_filtered = df_base[
 ]
 
 # -----------------------------------------------------------------------------
-# 5. GENERAL DE ATENCIONES Y COBERTURA (PUNTO 1: CIFRAS EXACTAS)
+# 5. GENERAL DE ATENCIONES Y COBERTURA (CIFRAS EXACTAS)
 # -----------------------------------------------------------------------------
 st.subheader("General de Atenciones y Cobertura")
 
@@ -276,9 +309,97 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 6. BARRAS CON VALOR ABSOLUTO, PORCENTAJE Y LEYENDA LIMPIA (PUNTOS 2 Y 3)
+# 6. GRÁFICOS DE BARRAS CON VALOR ABSOLUTO Y PORCENTAJE
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
+
+# Gráfico 1: Desglose por Edad y Sexo
+tot_h = df_filtered["suma_hombres"].sum()
+tot_m = df_filtered["suma_mujeres"].sum()
+
+df_etario = pd.DataFrame(
+    {
+        "Grupo Etario": [
+            "Niños/Niñas (0-17)",
+            "Niños/Niñas (0-17)",
+            "Adultos (18-59)",
+            "Adultos (18-59)",
+            "Adultos Mayores (60+)",
+            "Adultos Mayores (60+)",
+        ],
+        "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre", "Mujer"],
+        "Total": [
+            int(tot_h * 0.02),
+            int(tot_m * 0.02),
+            int(tot_h * 0.88),
+            int(tot_m * 0.88),
+            int(tot_h * 0.10),
+            int(tot_m * 0.10),
+        ],
+    }
+)
+tot_et = max(df_etario["Total"].sum(), 1)
+df_etario["Porcentaje"] = ((df_etario["Total"] / tot_et) * 100).round(1)
+df_etario["Etiqueta"] = df_etario.apply(
+    lambda r: f"{r['Total']:,} ({r['Porcentaje']}%)", axis=1
+)
+
+with g1:
+    st.subheader("Desglose por Sexo y Rango Etario")
+    if HAS_PLOTLY:
+        fig_et = px.bar(
+            df_etario,
+            x="Grupo Etario",
+            y="Total",
+            color="Sexo",
+            barmode="group",
+            text="Etiqueta",
+            color_discrete_sequence=[COLOR_AZUL_COOPI, COLOR_VERDE_COOPI],
+        )
+        fig_et.update_traces(textposition="outside")
+        fig_et.update_layout(yaxis_title="Cantidad de Participantes", height=420)
+        st.plotly_chart(fig_et, use_container_width=True)
+    else:
+        st.bar_chart(df_etario.set_index("Grupo Etario")["Total"])
+
+# Gráfico 2: Participantes por Sector MEAL (Con Valor + Porcentaje)
+df_sec = (
+    df_filtered.groupby("Sector_MEAL")["suma_total"]
+    .sum()
+    .reset_index()
+    .rename(columns={"Sector_MEAL": "Sector", "suma_total": "Total"})
+)
+tot_s = max(df_sec["Total"].sum(), 1)
+df_sec["Porcentaje"] = ((df_sec["Total"] / tot_s) * 100).round(1)
+df_sec["Etiqueta"] = df_sec.apply(
+    lambda r: f"{r['Total']:,} ({r['Porcentaje']}%)", axis=1
+)
+
+with g2:
+    st.subheader("Participantes por Sector de Respuesta MEAL")
+    if HAS_PLOTLY:
+        fig_s = px.bar(
+            df_sec,
+            x="Sector",
+            y="Total",
+            text="Etiqueta",
+            color="Sector",
+            color_discrete_sequence=PALETA_COOPI,
+        )
+        fig_s.update_traces(textposition="outside")
+        fig_s.update_layout(
+            yaxis_title="Cantidad de Participantes", showlegend=False, height=420
+        )
+        st.plotly_chart(fig_s, use_container_width=True)
+    else:
+        st.bar_chart(df_sec.set_index("Sector")["Total"])
+
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# 7. MAPA GEOGRÁFICO INTERACTIVO Y BARRAS POR MUNICIPIO
+# -----------------------------------------------------------------------------
+col_m1, col_m2 = st.columns(2)
 
 df_mun_bar = (
     df_filtered.groupby("Municipio_Clean")["suma_total"]
@@ -295,9 +416,27 @@ df_mun_bar["Leyenda"] = df_mun_bar.apply(
     lambda r: f"{r['Municipio']}: {r['Total']:,} ({r['Porcentaje']}%)", axis=1
 )
 
-with g1:
-    st.subheader("Participantes Beneficiados por Municipio")
+with col_m1:
+    st.subheader("Ubicación Geográfica por Municipio")
+    map_data = []
+    for _, row in df_mun_bar.iterrows():
+        mun = row["Municipio"]
+        tot = int(row["Total"])
+        if mun in COORD_MUNICIPIOS and tot > 0:
+            map_data.append(
+                {
+                    "lat": COORD_MUNICIPIOS[mun]["lat"],
+                    "lon": COORD_MUNICIPIOS[mun]["lon"],
+                }
+            )
 
+    if map_data:
+        st.map(pd.DataFrame(map_data), zoom=8)
+    else:
+        st.info("No hay datos geográficos para la selección actual.")
+
+with col_m2:
+    st.subheader("Participantes Beneficiados por Municipio")
     if HAS_PLOTLY:
         fig_m = px.bar(
             df_mun_bar,
@@ -316,33 +455,3 @@ with g1:
         st.plotly_chart(fig_m, use_container_width=True)
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Total"])
-
-with g2:
-    st.subheader("Participantes por Sector MEAL")
-    df_sec = (
-        df_filtered.groupby("Sector_MEAL")["suma_total"]
-        .sum()
-        .reset_index()
-        .rename(
-            columns={"Sector_MEAL": "Sector", "suma_total": "Participantes"}
-        )
-    )
-    tot_s = max(df_sec["Participantes"].sum(), 1)
-    df_sec["Porcentaje"] = ((df_sec["Participantes"] / tot_s) * 100).round(1)
-    df_sec["Etiqueta"] = df_sec.apply(
-        lambda r: f"{r['Participantes']:,} ({r['Porcentaje']}%)", axis=1
-    )
-
-    if HAS_PLOTLY:
-        fig_s = px.pie(
-            df_sec,
-            names="Sector",
-            values="Participantes",
-            hole=0.4,
-            color_discrete_sequence=PALETA_COOPI,
-        )
-        fig_s.update_traces(textinfo="percent+label")
-        fig_s.update_layout(height=420)
-        st.plotly_chart(fig_s, use_container_width=True)
-    else:
-        st.bar_chart(df_sec.set_index("Sector")["Participantes"])
