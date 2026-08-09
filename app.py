@@ -117,7 +117,6 @@ MAPA_MUNICIPIOS = {
 
 
 def clasificar_sector_seguro(row, nombre_proyecto):
-  # Conversión segura evadiendo errores con estructuras anidadas de Kobo
   text_parts = []
   for val in row.values:
     if val is None:
@@ -369,7 +368,7 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 6. GRÁFICOS DE BARRAS EN PARTICIPANTES ÚNICOS
+# 6. GRÁFICOS DE BARRAS Y TORTA EN PARTICIPANTES ÚNICOS
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
 
@@ -426,7 +425,7 @@ with g1:
   else:
     st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Participantes Únicos por Sector
+# Gráfico 2: Participantes Únicos por Sector (Gráfico de Torta / Donut)
 df_sec = (
     df_filtered.groupby("Sector_MEAL")["unicos_total"]
     .sum()
@@ -441,31 +440,32 @@ if len(df_filtered) == len(df_base):
     max_idx = df_sec["Unicos"].idxmax()
     df_sec.loc[max_idx, "Unicos"] += diff_sec
 
-tot_s = max(df_sec["Unicos"].sum(), 1)
-df_sec["Porcentaje"] = ((df_sec["Unicos"] / tot_s) * 100).round(1)
-df_sec["Etiqueta"] = df_sec.apply(
-    lambda r: f"{r['Unicos']:,} ({r['Porcentaje']}%)", axis=1
-)
-
 with g2:
   st.subheader("Participantes Únicos por Sector")
   if HAS_PLOTLY:
-    fig_s = px.bar(
+    fig_s = px.pie(
         df_sec,
-        x="Sector",
-        y="Unicos",
-        text="Etiqueta",
+        names="Sector",
+        values="Unicos",
         color="Sector",
         color_discrete_sequence=PALETA_COOPI,
+        hole=0.35,
     )
     fig_s.update_traces(
-        textposition="outside", textfont=dict(size=12, color="#1F2937")
+        textinfo="value+percent",
+        textfont=dict(size=12),
+        textposition="inside",
+        hovertemplate=(
+            "<b>%{label}</b><br>Participantes Únicos: %{value:,}<br>Porcentaje:"
+            " %{percent}<extra></extra>"
+        ),
     )
     fig_s.update_layout(
-        yaxis_title="Participantes Únicos",
-        yaxis=dict(range=[0, max(df_sec["Unicos"].max() * 1.25, 10)]),
-        showlegend=False,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5
+        ),
         height=420,
+        margin=dict(t=20, b=50, l=10, r=10),
     )
     st.plotly_chart(fig_s, use_container_width=True)
   else:
