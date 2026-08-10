@@ -341,7 +341,7 @@ c1.metric("Total Atenciones", f"{total_atenciones:,}")
 c2.metric("Participantes Únicos", f"{unicos_participantes:,}")
 c3.metric("Estados Atendidos", df_filtered["Estado_Clean"].nunique())
 c4.metric("Municipios Atendidos", df_filtered["Municipio_Clean"].nunique())
-c5.metric("Sector", df_filtered["Sectores MEAL"].nunique())
+c5.metric("Sector", df_filtered["Sector"].nunique())
 
 st.markdown("---")
 
