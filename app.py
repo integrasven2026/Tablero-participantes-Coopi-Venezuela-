@@ -137,7 +137,6 @@ def cargar_datos_desde_data():
     if not os.path.exists(folder_path):
         return pd.DataFrame()
 
-    # Buscar EXCLUSIVAMENTE archivos dentro de la carpeta /data
     files = glob.glob(os.path.join(folder_path, "*.xlsx")) + \
             glob.glob(os.path.join(folder_path, "*.xls")) + \
             glob.glob(os.path.join(folder_path, "*.csv"))
@@ -151,25 +150,24 @@ def cargar_datos_desde_data():
                 df_temp = pd.read_csv(file_path)
 
             if not df_temp.empty:
-                # Estandarización de columnas dinámicas
                 cols_lower = {str(c).strip().lower(): c for c in df_temp.columns}
                 
-                # Identificar Proyecto
+                # Proyecto
                 col_proy = next((c for k, c in cols_lower.items() if "proyecto" in k or "proy" in k), None)
                 if col_proy:
-                    df_temp["Proyecto"] = df_temp[col_proy].astype(str)
+                    df_temp["Proyecto"] = df_temp[col_proy].fillna("Sin Nombre").astype(str)
                 else:
                     nombre_archivo = os.path.basename(file_path).replace(".xlsx", "").replace(".xls", "").replace(".csv", "")
                     df_temp["Proyecto"] = nombre_archivo
 
-                # Identificar Año
+                # Año
                 col_anio = next((c for k, c in cols_lower.items() if "año" in k or "anio" in k or "year" in k), None)
                 if col_anio:
-                    df_temp["Año"] = df_temp[col_anio].astype(str)
+                    df_temp["Año"] = df_temp[col_anio].fillna("2025").astype(str)
                 else:
                     df_temp["Año"] = "2025"
 
-                # Identificar Estado y Municipio
+                # Estado y Municipio
                 col_est = next((c for k, c in cols_lower.items() if "estado" in k), None)
                 df_temp["Estado_Clean"] = df_temp[col_est].astype(str).replace("VE19", "Sucre") if col_est else "Sucre"
 
@@ -184,14 +182,14 @@ def cargar_datos_desde_data():
                 else:
                     df_temp["Municipio_Clean"] = "Sucre"
 
-                # Identificar Sector
+                # Sector
                 col_sec = next((c for k, c in cols_lower.items() if "sector" in k), None)
                 if col_sec:
-                    df_temp["Sector"] = df_temp[col_sec].astype(str)
+                    df_temp["Sector"] = df_temp[col_sec].fillna("General").astype(str)
                 else:
                     df_temp["Sector"] = df_temp.apply(lambda r: clasificar_sector_seguro(r, df_temp["Proyecto"].iloc[0]), axis=1)
 
-                # Identificar totales numéricos
+                # Totales numéricos
                 col_h = next((c for k, c in cols_lower.items() if "hombre" in k or "masculino" in k), None)
                 col_m = next((c for k, c in cols_lower.items() if "mujer" in k or "femenino" in k), None)
                 col_t = next((c for k, c in cols_lower.items() if "total" in k or "suma_total" in k or "atencion" in k), None)
@@ -204,7 +202,6 @@ def cargar_datos_desde_data():
                 else:
                     df_temp["suma_total"] = df_temp["suma_hombres"] + df_temp["suma_mujeres"]
 
-                # Cálculos de Participantes Únicos
                 df_temp["unicos_total"] = df_temp["suma_total"] * FACTOR_UNICOS
                 df_temp["unicos_hombres"] = df_temp["suma_hombres"] * FACTOR_UNICOS
                 df_temp["unicos_mujeres"] = df_temp["suma_mujeres"] * FACTOR_UNICOS
@@ -235,42 +232,38 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES
+# 4. FILTROS LATERALES (BLINDADOS CONTRA NULOS / NaN)
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
-proy_sel = st.sidebar.multiselect(
-    "Proyecto:",
-    sorted(list(df_base["Proyecto"].dropna().unique())),
-    default=list(df_base["Proyecto"].unique()),
-)
-anio_sel = st.sidebar.multiselect(
-    "Año:",
-    sorted(list(df_base["Año"].dropna().unique())),
-    default=list(df_base["Año"].unique()),
-)
-est_sel = st.sidebar.multiselect(
-    "Estado:",
-    sorted(list(df_base["Estado_Clean"].dropna().unique())),
-    default=list(df_base["Estado_Clean"].unique()),
-)
-muni_sel = st.sidebar.multiselect(
-    "Municipio:",
-    sorted(list(df_base["Municipio_Clean"].dropna().unique())),
-    default=list(df_base["Municipio_Clean"].unique()),
-)
-sec_sel = st.sidebar.multiselect(
-    "Sector de Implementación:",
-    sorted(list(df_base["Sector"].dropna().unique())),
-    default=list(df_base["Sector"].unique()),
-)
+def obtener_opciones_limpias(df, columna):
+    if columna not in df.columns:
+        return []
+    s = df[columna].dropna().astype(str).str.strip()
+    unicos = [x for x in s.unique() if x.lower() not in ['nan', 'none', '', '<na>']]
+    return sorted(unicos)
+
+opc_proy = obtener_opciones_limpias(df_base, "Proyecto")
+proy_sel = st.sidebar.multiselect("Proyecto:", opc_proy, default=opc_proy)
+
+opc_anio = obtener_opciones_limpias(df_base, "Año")
+anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=opc_anio)
+
+opc_est = obtener_opciones_limpias(df_base, "Estado_Clean")
+est_sel = st.sidebar.multiselect("Estado:", opc_est, default=opc_est)
+
+opc_muni = obtener_opciones_limpias(df_base, "Municipio_Clean")
+muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=opc_muni)
+
+opc_sec = obtener_opciones_limpias(df_base, "Sector")
+sec_sel = st.sidebar.multiselect("Sector de Implementación:", opc_sec, default=opc_sec)
 
 df_filtered = df_base[
-    (df_base["Proyecto"].isin(proy_sel))
-    & (df_base["Año"].isin(anio_sel))
-    & (df_base["Estado_Clean"].isin(est_sel))
-    & (df_base["Municipio_Clean"].isin(muni_sel))
-    & (df_base["Sector"].isin(sec_sel))
+    (df_base["Proyecto"].astype(str).str.strip().isin(proy_sel))
+    & (df_base["Año"].astype(str).str.strip().isin(anio_sel))
+    & (df_base["Estado_Clean"].astype(str).str.strip().isin(est_sel))
+    & (df_base["Municipio_Clean"].astype(str).str.strip().isin(muni_sel))
+    & (df_base["Sector"].astype(str).str.strip().isin(sec_sel))
 ]
 
 # -----------------------------------------------------------------------------
@@ -375,7 +368,7 @@ df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
 
 if len(df_filtered) == len(df_base):
     diff_sec = 2449 - df_sec["Unicos"].sum()
-    if diff_sec != 0:
+    if diff_sec != 0 and not df_sec.empty:
         max_idx = df_sec["Unicos"].idxmax()
         df_sec.loc[max_idx, "Unicos"] += diff_sec
 
@@ -463,7 +456,7 @@ df_mun_bar["Unicos"] = df_mun_bar["Unicos"].round().astype(int)
 
 if len(df_filtered) == len(df_base):
     diff_mun = 2449 - df_mun_bar["Unicos"].sum()
-    if diff_mun != 0:
+    if diff_mun != 0 and not df_mun_bar.empty:
         max_idx_m = df_mun_bar["Unicos"].idxmax()
         df_mun_bar.loc[max_idx_m, "Unicos"] += diff_mun
 
