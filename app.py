@@ -90,7 +90,7 @@ with col_logo:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. CARGA EXCLUSIVA DE BASES DE DATOS DESDE LA CARPETA 'DATA'
+# 3. CARGA EXCLUSIVA Y DEPURADA DESDE LA CARPETA 'DATA'
 # -----------------------------------------------------------------------------
 MAPA_MUNICIPIOS = {
     "VE1910": "Sucre",
@@ -137,9 +137,12 @@ def cargar_datos_desde_data():
     if not os.path.exists(folder_path):
         return pd.DataFrame()
 
-    files = glob.glob(os.path.join(folder_path, "*.xlsx")) + \
-            glob.glob(os.path.join(folder_path, "*.xls")) + \
-            glob.glob(os.path.join(folder_path, "*.csv"))
+    all_files = glob.glob(os.path.join(folder_path, "*.xlsx")) + \
+                glob.glob(os.path.join(folder_path, "*.xls")) + \
+                glob.glob(os.path.join(folder_path, "*.csv"))
+
+    # Filtrar archivos temporales o del sistema (ej. ~$archivo.xlsx)
+    files = [f for f in all_files if not os.path.basename(f).startswith("~$") and not os.path.basename(f).startswith(".")]
 
     dfs = []
     for file_path in files:
@@ -152,18 +155,28 @@ def cargar_datos_desde_data():
             if not df_temp.empty:
                 cols_lower = {str(c).strip().lower(): c for c in df_temp.columns}
                 
-                # Proyecto
-                col_proy = next((c for k, c in cols_lower.items() if "proyecto" in k or "proy" in k), None)
+                # Nombre del archivo para usar como fallback limpio
+                base_name = os.path.splitext(os.path.basename(file_path))[0]
+                nombre_archivo_limpio = base_name.replace("_", " ").replace("-", " ").strip()
+
+                # Identificar si existe una columna de proyecto real y legible
+                col_proy = next((c for k, c in cols_lower.items() if k in ["proyecto", "nombre_proyecto", "nombre del proyecto"]), None)
+                
+                usar_fallback = True
                 if col_proy:
-                    df_temp["Proyecto"] = df_temp[col_proy].fillna("Sin Nombre").astype(str)
-                else:
-                    nombre_archivo = os.path.basename(file_path).replace(".xlsx", "").replace(".xls", "").replace(".csv", "")
-                    df_temp["Proyecto"] = nombre_archivo
+                    # Verificar si la columna no es puramente numérica o de códigos (evita 0.0, 1.0)
+                    es_numerico = pd.to_numeric(df_temp[col_proy], errors='coerce').notna().all()
+                    if not es_numerico and not df_temp[col_proy].dropna().empty:
+                        df_temp["Proyecto"] = df_temp[col_proy].fillna(nombre_archivo_limpio).astype(str).str.strip()
+                        usar_fallback = False
+
+                if usar_fallback:
+                    df_temp["Proyecto"] = nombre_archivo_limpio
 
                 # Año
                 col_anio = next((c for k, c in cols_lower.items() if "año" in k or "anio" in k or "year" in k), None)
                 if col_anio:
-                    df_temp["Año"] = df_temp[col_anio].fillna("2025").astype(str)
+                    df_temp["Año"] = df_temp[col_anio].fillna("2025").astype(str).str.replace(".0", "", regex=False)
                 else:
                     df_temp["Año"] = "2025"
 
@@ -232,7 +245,7 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES (BLINDADOS CONTRA NULOS / NaN)
+# 4. FILTROS LATERALES LIMPIOS
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
