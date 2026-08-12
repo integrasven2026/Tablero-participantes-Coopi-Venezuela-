@@ -44,16 +44,32 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas base de municipios del Estado Sucre
+# Coordenadas geográficas base de municipios de todos los Estados
 COORD_MUNICIPIOS = {
+    # Estado Sucre
     "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
     "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
     "MARIÑO": {"lat": 10.5833, "lon": -62.5833},
+    "MARINO": {"lat": 10.5833, "lon": -62.5833},
     "SUCRE": {"lat": 10.4531, "lon": -64.1826},
     "MEJÍA": {"lat": 10.5011, "lon": -63.8015},
     "MEJIA": {"lat": 10.5011, "lon": -63.8015},
     "BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
     "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
+    "CRUZ SALMERÓN ACOSTA": {"lat": 10.6222, "lon": -64.1794},
+    "CRUZ SALMERON ACOSTA": {"lat": 10.6222, "lon": -64.1794},
+    # Distrito Capital (Caracas)
+    "LIBERTADOR": {"lat": 10.4880, "lon": -66.8792},
+    # Estado Miranda
+    "BARUTA": {"lat": 10.4344, "lon": -66.8761},
+    "URDANETA": {"lat": 10.1500, "lon": -66.8667},
+    # Estado Bolívar
+    "CARONÍ": {"lat": 8.2978, "lon": -62.7114},
+    "CARONI": {"lat": 8.2978, "lon": -62.7114},
+    "EL CALLAO": {"lat": 7.3489, "lon": -61.8197},
+    # Estado Delta Amacuro
+    "TUCUPITA": {"lat": 9.0611, "lon": -62.0494},
+    "CASACOIMA": {"lat": 8.5211, "lon": -62.2281},
 }
 
 OFFSETS_GEO = [
@@ -272,7 +288,12 @@ def cargar_datos_desde_data():
                 None,
             )
             df_temp["Estado_Clean"] = (
-                df_temp[col_est].astype(str).replace("VE19", "Sucre")
+                df_temp[col_est]
+                .astype(str)
+                .str.replace("_", " ")
+                .replace("VE19", "Sucre")
+                .str.strip()
+                .str.title()
                 if col_est
                 else "Sucre"
             )
@@ -291,6 +312,7 @@ def cargar_datos_desde_data():
                     .astype(str)
                     .replace(MAPA_MUNICIPIOS)
                     .apply(lambda x: re.sub(r"^[A-Z0-9_-]+\s*-\s*", "", str(x)))
+                    .str.replace("_", " ")
                     .str.strip()
                     .str.title()
                 )
@@ -451,7 +473,7 @@ opc_anio = obtener_opciones_limpias(df_base, "Año")
 anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=opc_anio)
 
 opc_est = obtener_opciones_limpias(df_base, "Estado_Clean")
-est_sel = st.sidebar.multiselect("Estado:", opc_est, default=est_sel if 'est_sel' in locals() else opc_est)
+est_sel = st.sidebar.multiselect("Estado:", opc_est, default=opc_est)
 
 opc_muni = obtener_opciones_limpias(df_base, "Municipio_Clean")
 muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=opc_muni)
@@ -636,7 +658,13 @@ df_map_group["Participantes_Atendidos"] = (
 
 map_rows = []
 for mun, group in df_map_group.groupby("Municipio"):
-    mun_upper = str(mun).strip().upper()
+    mun_upper = (
+        str(mun)
+        .strip()
+        .upper()
+        .replace("_", " ")
+        .replace("SUCRE ", "SUCRE")
+    )
     if mun_upper in COORD_MUNICIPIOS:
         base_lat = COORD_MUNICIPIOS[mun_upper]["lat"]
         base_lon = COORD_MUNICIPIOS[mun_upper]["lon"]
@@ -689,7 +717,7 @@ with col_m1:
             lon="lon",
             size="Participantes_Atendidos",
             color="Sector",
-            zoom=8,
+            zoom=5.8,
             size_max=28,
             color_discrete_sequence=PALETA_COOPI,
             map_style="open-street-map",
@@ -740,3 +768,14 @@ with col_m2:
         st.plotly_chart(fig_m, width="stretch")
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
+           
+                  
+
+            
+
+
+
+
+
+      
+     
