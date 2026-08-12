@@ -12,7 +12,7 @@ except ImportError:
     HAS_PLOTLY = False
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI
+# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI (PALETA DE ALTO CONTRASTE)
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Consolidación Histórica de Participantes - COOPI",
@@ -22,13 +22,15 @@ st.set_page_config(
 
 COLOR_AZUL_COOPI = "#0082C8"
 COLOR_VERDE_COOPI = "#00A859"
-PALETA_COOPI = [
-    "#0082C8",
-    "#00A859",
-    "#0284C7",
-    "#10B981",
-    "#005580",
-    "#059669",
+
+# Paleta multicolor de alto contraste para diferenciar sectores claramente
+PALETA_SECTORES = [
+    "#0082C8",  # Azul COOPI
+    "#00A859",  # Verde COOPI
+    "#F59E0B",  # Ámbar / Naranja
+    "#8B5CF6",  # Púrpura
+    "#EC4899",  # Magenta / Rosa
+    "#06B6D4",  # Cían brillante
 ]
 
 # Factor global de conversión a Participantes Únicos (2,449 / 4,462)
@@ -525,7 +527,7 @@ v6.metric("% Embarazadas/Lact.", "0.0%")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 6. GRÁFICOS DE BARRAS Y TORTA EN PARTICIPANTES ÚNICOS
+# 6. GRÁFICOS DE BARRAS Y TORTA CON PALETA DE ALTO CONTRASTE
 # -----------------------------------------------------------------------------
 g1, g2 = st.columns(2)
 
@@ -584,7 +586,7 @@ with g1:
     else:
         st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
-# Gráfico 2: Participantes Únicos por Sector (Torta)
+# Gráfico 2: Participantes Únicos por Sector (Torta con alto contraste)
 df_sec = (
     df_filtered.groupby("Sector")["unicos_total"]
     .sum()
@@ -607,7 +609,7 @@ with g2:
             names="Sector",
             values="Unicos",
             color="Sector",
-            color_discrete_sequence=PALETA_COOPI,
+            color_discrete_sequence=PALETA_SECTORES,
             hole=0.35,
         )
         fig_s.update_traces(
@@ -719,7 +721,7 @@ with col_m1:
             color="Sector",
             zoom=5.8,
             size_max=28,
-            color_discrete_sequence=PALETA_COOPI,
+            color_discrete_sequence=PALETA_SECTORES,
             map_style="open-street-map",
         )
 
@@ -754,7 +756,7 @@ with col_m2:
             y="Unicos",
             color="Leyenda",
             text="Etiqueta",
-            color_discrete_sequence=PALETA_COOPI,
+            color_discrete_sequence=PALETA_SECTORES,
         )
         fig_m.update_traces(
             textposition="outside", textfont=dict(size=12, color="#1F2937")
@@ -768,14 +770,3 @@ with col_m2:
         st.plotly_chart(fig_m, width="stretch")
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
-           
-                  
-
-            
-
-
-
-
-
-      
-     
