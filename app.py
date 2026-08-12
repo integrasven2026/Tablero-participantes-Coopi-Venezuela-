@@ -12,7 +12,7 @@ except ImportError:
     HAS_PLOTLY = False
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI (PALETA DE ALTO CONTRASTE)
+# 1. CONFIGURACIÓN DE PÁGINA Y COLORES COOPI
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Consolidación Histórica de Participantes - COOPI",
@@ -23,17 +23,15 @@ st.set_page_config(
 COLOR_AZUL_COOPI = "#0082C8"
 COLOR_VERDE_COOPI = "#00A859"
 
-# Paleta multicolor de alto contraste para diferenciar sectores claramente
 PALETA_SECTORES = [
     "#0082C8",  # Azul COOPI
     "#00A859",  # Verde COOPI
     "#F59E0B",  # Ámbar / Naranja
     "#8B5CF6",  # Púrpura
     "#EC4899",  # Magenta / Rosa
-    "#06B6D4",  # Cían brillante
+    "#06B6D4",  # Cían
 ]
 
-# Factor global de conversión a Participantes Únicos (2,449 / 4,462)
 FACTOR_UNICOS = 2449 / 4462
 
 st.markdown(
@@ -46,32 +44,42 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Coordenadas geográficas base de municipios de todos los Estados
-COORD_MUNICIPIOS = {
+# -----------------------------------------------------------------------------
+# DICCIONARIO DE COORDENADAS POR ESTADO Y MUNICIPIO (CLAVE COMBINADA)
+# -----------------------------------------------------------------------------
+COORD_ESTADO_MUNICIPIO = {
     # Estado Sucre
-    "BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
-    "BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
-    "MARIÑO": {"lat": 10.5833, "lon": -62.5833},
-    "MARINO": {"lat": 10.5833, "lon": -62.5833},
-    "SUCRE": {"lat": 10.4531, "lon": -64.1826},
-    "MEJÍA": {"lat": 10.5011, "lon": -63.8015},
-    "MEJIA": {"lat": 10.5011, "lon": -63.8015},
-    "BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
-    "BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
-    "CRUZ SALMERÓN ACOSTA": {"lat": 10.6222, "lon": -64.1794},
-    "CRUZ SALMERON ACOSTA": {"lat": 10.6222, "lon": -64.1794},
-    # Distrito Capital (Caracas)
-    "LIBERTADOR": {"lat": 10.4880, "lon": -66.8792},
+    "SUCRE|BERMÚDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "SUCRE|BERMUDEZ": {"lat": 10.6558, "lon": -63.2536},
+    "SUCRE|MARIÑO": {"lat": 10.5833, "lon": -62.5833},
+    "SUCRE|MARINO": {"lat": 10.5833, "lon": -62.5833},
+    "SUCRE|SUCRE": {"lat": 10.4531, "lon": -64.1826},  # Cumaná
+    "SUCRE|MEJÍA": {"lat": 10.5011, "lon": -63.8015},
+    "SUCRE|MEJIA": {"lat": 10.5011, "lon": -63.8015},
+    "SUCRE|BOLÍVAR": {"lat": 10.4521, "lon": -63.9512},
+    "SUCRE|BOLIVAR": {"lat": 10.4521, "lon": -63.9512},
+    "SUCRE|CRUZ SALMERÓN ACOSTA": {"lat": 10.6222, "lon": -64.1794},
+    "SUCRE|CRUZ SALMERON ACOSTA": {"lat": 10.6222, "lon": -64.1794},
+
     # Estado Miranda
-    "BARUTA": {"lat": 10.4344, "lon": -66.8761},
-    "URDANETA": {"lat": 10.1500, "lon": -66.8667},
+    "MIRANDA|SUCRE": {"lat": 10.4815, "lon": -66.8203},  # Petare / Caracas Este
+    "MIRANDA|BARUTA": {"lat": 10.4344, "lon": -66.8761},
+    "MIRANDA|URDANETA": {"lat": 10.1500, "lon": -66.8667},  # Cúa
+
+    # Distrito Capital
+    "DISTRITO CAPITAL|LIBERTADOR": {"lat": 10.4880, "lon": -66.8792},  # Caracas Centro/Oeste
+
     # Estado Bolívar
-    "CARONÍ": {"lat": 8.2978, "lon": -62.7114},
-    "CARONI": {"lat": 8.2978, "lon": -62.7114},
-    "EL CALLAO": {"lat": 7.3489, "lon": -61.8197},
+    "BOLÍVAR|CARONÍ": {"lat": 8.2978, "lon": -62.7114},  # Ciudad Guayana
+    "BOLIVAR|CARONÍ": {"lat": 8.2978, "lon": -62.7114},
+    "BOLÍVAR|CARONI": {"lat": 8.2978, "lon": -62.7114},
+    "BOLIVAR|CARONI": {"lat": 8.2978, "lon": -62.7114},
+    "BOLÍVAR|EL CALLAO": {"lat": 7.3489, "lon": -61.8197},
+    "BOLIVAR|EL CALLAO": {"lat": 7.3489, "lon": -61.8197},
+
     # Estado Delta Amacuro
-    "TUCUPITA": {"lat": 9.0611, "lon": -62.0494},
-    "CASACOIMA": {"lat": 8.5211, "lon": -62.2281},
+    "DELTA AMACURO|TUCUPITA": {"lat": 9.0611, "lon": -62.0494},
+    "DELTA AMACURO|CASACOIMA": {"lat": 8.5211, "lon": -62.2281},
 }
 
 OFFSETS_GEO = [
@@ -337,7 +345,7 @@ def cargar_datos_desde_data():
                     axis=1,
                 )
 
-            # Cuantificación (Individual nominal vs Agregado)
+            # Cuantificación
             col_sexo = next(
                 (
                     c
@@ -639,16 +647,17 @@ with g2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 7. MAPA INTERACTIVO Y MUNICIPIOS
+# 7. MAPA INTERACTIVO Y MUNICIPIOS (UBICACIÓN EXACTA POR ESTADO Y MUNICIPIO)
 # -----------------------------------------------------------------------------
 col_m1, col_m2 = st.columns(2)
 
 df_map_group = (
-    df_filtered.groupby(["Municipio_Clean", "Sector"])["unicos_total"]
+    df_filtered.groupby(["Estado_Clean", "Municipio_Clean", "Sector"])["unicos_total"]
     .sum()
     .reset_index()
     .rename(
         columns={
+            "Estado_Clean": "Estado",
             "Municipio_Clean": "Municipio",
             "unicos_total": "Participantes_Atendidos",
         }
@@ -659,17 +668,16 @@ df_map_group["Participantes_Atendidos"] = (
 )
 
 map_rows = []
-for mun, group in df_map_group.groupby("Municipio"):
-    mun_upper = (
-        str(mun)
-        .strip()
-        .upper()
-        .replace("_", " ")
-        .replace("SUCRE ", "SUCRE")
-    )
-    if mun_upper in COORD_MUNICIPIOS:
-        base_lat = COORD_MUNICIPIOS[mun_upper]["lat"]
-        base_lon = COORD_MUNICIPIOS[mun_upper]["lon"]
+for (est, mun), group in df_map_group.groupby(["Estado", "Municipio"]):
+    est_upper = str(est).strip().upper()
+    mun_upper = str(mun).strip().upper()
+
+    # Clave combinada ESTADO|MUNICIPIO
+    clave_geo = f"{est_upper}|{mun_upper}"
+
+    if clave_geo in COORD_ESTADO_MUNICIPIO:
+        base_lat = COORD_ESTADO_MUNICIPIO[clave_geo]["lat"]
+        base_lon = COORD_ESTADO_MUNICIPIO[clave_geo]["lon"]
 
         for idx, (_, row) in enumerate(group.iterrows()):
             cant = int(row["Participantes_Atendidos"])
@@ -677,6 +685,7 @@ for mun, group in df_map_group.groupby("Municipio"):
                 d_lat, d_lon = OFFSETS_GEO[idx % len(OFFSETS_GEO)]
                 map_rows.append(
                     {
+                        "Estado": row["Estado"],
                         "Municipio": row["Municipio"],
                         "Sector": row["Sector"],
                         "Participantes_Atendidos": cant,
@@ -727,12 +736,12 @@ with col_m1:
 
         fig_map.update_traces(
             hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
-                "Sector: %{customdata[1]}<br>"
-                "Atendidos: <b>%{customdata[2]:,}</b><extra></extra>"
+                "<b>%{customdata[0]} (%{customdata[1]})</b><br>"
+                "Sector: %{customdata[2]}<br>"
+                "Atendidos: <b>%{customdata[3]:,}</b><extra></extra>"
             ),
             customdata=df_map_final[
-                ["Municipio", "Sector", "Participantes_Atendidos"]
+                ["Municipio", "Estado", "Sector", "Participantes_Atendidos"]
             ],
         )
 
