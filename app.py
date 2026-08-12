@@ -106,11 +106,7 @@ st.markdown("---")
 def clasificar_sector_seguro(row, nombre_proyecto=""):
     text_parts = []
     for val in row.values:
-        if val is None:
-            continue
-        if isinstance(val, (list, dict)):
-            text_parts.append(str(val).lower())
-        elif pd.notna(val):
+        if pd.notna(val):
             text_parts.append(str(val).lower())
 
     row_text = " ".join(text_parts)
@@ -312,7 +308,7 @@ def cargar_datos_desde_data():
             else:
                 df_temp["Sector"] = df_temp.apply(
                     lambda r: clasificar_sector_seguro(
-                        r, df_temp["Proyecto"].iloc[0]
+                        r, str(df_temp["Proyecto"].iloc[0])
                     ),
                     axis=1,
                 )
@@ -357,10 +353,10 @@ def cargar_datos_desde_data():
             if col_sexo and not col_h:
                 s_sex = df_temp[col_sexo].astype(str).str.upper()
                 df_temp["suma_hombres"] = s_sex.apply(
-                    lambda x: 1 if "H" in x or "MASC" in x else 0
+                    lambda x: 1 if "H" in str(x) or "MASC" in str(x) else 0
                 )
                 df_temp["suma_mujeres"] = s_sex.apply(
-                    lambda x: 1 if "M" in x or "FEM" in x or "F" in x else 0
+                    lambda x: 1 if "M" in str(x) or "FEM" in str(x) or "F" in str(x) else 0
                 )
                 df_temp["suma_total"] = 1.0
             else:
@@ -443,7 +439,7 @@ def obtener_opciones_limpias(df, columna):
         return []
     s = df[columna].dropna().astype(str).str.strip()
     unicos = [
-        x for x in s.unique() if x.lower() not in ["nan", "none", "", "<na>"]
+        x for x in s.unique() if str(x).lower() not in ["nan", "none", "", "<na>"]
     ]
     return sorted(unicos)
 
@@ -455,7 +451,7 @@ opc_anio = obtener_opciones_limpias(df_base, "Año")
 anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=opc_anio)
 
 opc_est = obtener_opciones_limpias(df_base, "Estado_Clean")
-est_sel = st.sidebar.multiselect("Estado:", opc_est, default=opc_est)
+est_sel = st.sidebar.multiselect("Estado:", opc_est, default=est_sel if 'est_sel' in locals() else opc_est)
 
 opc_muni = obtener_opciones_limpias(df_base, "Municipio_Clean")
 muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=opc_muni)
@@ -562,7 +558,7 @@ with g1:
             yaxis=dict(range=[0, max(df_etario["Unicos"].max() * 1.25, 10)]),
             height=420,
         )
-        st.plotly_chart(fig_et, use_container_width=True)
+        st.plotly_chart(fig_et, width="stretch")
     else:
         st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
@@ -612,7 +608,7 @@ with g2:
             height=420,
             margin=dict(t=20, b=50, l=10, r=10),
         )
-        st.plotly_chart(fig_s, use_container_width=True)
+        st.plotly_chart(fig_s, width="stretch")
     else:
         st.bar_chart(df_sec.set_index("Sector")["Unicos"])
 
@@ -687,7 +683,7 @@ df_mun_bar["Leyenda"] = df_mun_bar.apply(
 with col_m1:
     st.subheader("Ubicación Geográfica por Municipio")
     if not df_map_final.empty and HAS_PLOTLY:
-        fig_map = px.scatter_mapbox(
+        fig_map = px.scatter_map(
             df_map_final,
             lat="lat",
             lon="lon",
@@ -696,7 +692,7 @@ with col_m1:
             zoom=8,
             size_max=28,
             color_discrete_sequence=PALETA_COOPI,
-            mapbox_style="open-street-map",
+            map_style="open-street-map",
         )
 
         fig_map.update_traces(
@@ -715,7 +711,7 @@ with col_m1:
             showlegend=False,
             height=420,
         )
-        st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(fig_map, width="stretch")
     elif not df_map_final.empty:
         st.map(df_map_final[["lat", "lon"]])
     else:
@@ -741,6 +737,6 @@ with col_m2:
             yaxis=dict(range=[0, max(df_mun_bar["Unicos"].max() * 1.25, 10)]),
             height=420,
         )
-        st.plotly_chart(fig_m, use_container_width=True)
+        st.plotly_chart(fig_m, width="stretch")
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
