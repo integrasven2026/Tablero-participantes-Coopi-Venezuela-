@@ -263,6 +263,45 @@ def cargar_datos_desde_data():
             else:
                 df_temp["Proyecto"] = nombre_archivo_limpio
 
+            # Socio Implementador
+            col_socio = next(
+                (
+                    c
+                    for k, c in cols_clean.items()
+                    if k in ["socio", "socio_implementador", "partner", "organización", "organizacion"]
+                ),
+                None,
+            )
+            if col_socio and not df_temp[col_socio].dropna().empty:
+                df_temp["Socio"] = (
+                    df_temp[col_socio]
+                    .fillna("COOPI")
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
+            else:
+                df_temp["Socio"] = "COOPI"
+
+            # Código o Nombre de Actividad
+            col_act = next(
+                (
+                    c
+                    for k, c in cols_clean.items()
+                    if k in ["actividad", "actividad_nombre", "activity", "codigo_actividad", "cod_actividad"]
+                ),
+                None,
+            )
+            if col_act and not df_temp[col_act].dropna().empty:
+                df_temp["Actividad"] = (
+                    df_temp[col_act]
+                    .fillna("Actividad General")
+                    .astype(str)
+                    .str.strip()
+                )
+            else:
+                df_temp["Actividad"] = "Actividad General"
+
             # Año
             col_anio = next(
                 (
@@ -779,3 +818,161 @@ with col_m2:
         st.plotly_chart(fig_m, width="stretch")
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
+
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# 8. SEGUIMIENTO A LAS ACTIVIDADES DEL CONSORCIO (REPORTE PARA SOCIOS)
+# -----------------------------------------------------------------------------
+st.subheader("Seguimiento de Actividades por Socio y Sector")
+
+# Definición de metas por actividad y socio (Marco Lógico Consorcio INTEGRAS)
+METAS_ACTIVIDADES = {
+    "General Protection Case Management": {
+        "Sector": "Protección y Sensibilización Comunitaria",
+        "Meta_Proyecto": 2108,
+        "Metas_Socios": {"COOPI": 1000, "LWF": 608, "HIAS": 500},
+    },
+    "Child-Friendly Spaces (CFS)": {
+        "Sector": "Protección y Sensibilización Comunitaria",
+        "Meta_Proyecto": 3526,
+        "Metas_Socios": {"HIAS": 1500, "LWF": 1100, "COOPI": 926},
+    },
+    "Legal Aid & Documentation": {
+        "Sector": "Protección y Sensibilización Comunitaria",
+        "Meta_Proyecto": 1047,
+        "Metas_Socios": {"COOPI": 400, "HIAS": 350, "LWF": 297},
+    },
+    "Individual Protection Assistance (IPA)": {
+        "Sector": "Protección y Sensibilización Comunitaria",
+        "Meta_Proyecto": 3194,
+        "Metas_Socios": {"COOPI": 1200, "HIAS": 1000, "LWF": 994},
+    },
+    "Legal Aid on HLP": {
+        "Sector": "Protección y Sensibilización Comunitaria",
+        "Meta_Proyecto": 62,
+        "Metas_Socios": {"COOPI": 25, "HIAS": 20, "LWF": 17},
+    },
+    "IPC Equipment & Bio-safety": {
+        "Sector": "Agua, Saneamiento e Higiene (WASH)",
+        "Meta_Proyecto": 2752,
+        "Metas_Socios": {"COOPI": 2000, "PALUZ": 752},
+    },
+    "Essential Health & Medicines": {
+        "Sector": "Salud / Protección",
+        "Meta_Proyecto": 752,
+        "Metas_Socios": {"PALUZ": 752},
+    },
+    "Health Staff Capacity Building": {
+        "Sector": "Salud / Protección",
+        "Meta_Proyecto": 90,
+        "Metas_Socios": {"PALUZ": 90},
+    },
+    "Sexual & Reproductive Health (SRH)": {
+        "Sector": "Salud / Protección",
+        "Meta_Proyecto": 1144,
+        "Metas_Socios": {"PLAFAM": 750, "PALUZ": 394},
+    },
+    "Clinical Waste Management": {
+        "Sector": "Gestión Ambiental y Residuos Sólidos",
+        "Meta_Proyecto": 30,
+        "Metas_Socios": {"COOPI": 30},
+    },
+}
+
+# Filtro de socio para el reporte de actividades
+socios_disponibles = sorted(
+    list(
+        set(
+            df_filtered["Socio"].unique().tolist()
+            if "Socio" in df_filtered.columns
+            else ["COOPI"]
+        ).union({"COOPI", "HIAS", "LWF", "PALUZ", "PLAFAM"})
+    )
+)
+
+col_s1, col_s2 = st.columns([1, 3])
+with col_s1:
+    socio_seleccionado = st.selectbox(
+        "Seleccionar Socio para Filtrar Reporte:",
+        options=["TODOS"] + socios_disponibles,
+        index=0,
+    )
+
+filas_reporte = []
+
+for act_nombre, datos in METAS_ACTIVIDADES.items():
+    sec = datos["Sector"]
+    meta_proy = datos["Meta_Proyecto"]
+    metas_socios = datos["Metas_Socios"]
+
+    if socio_seleccionado != "TODOS":
+        if socio_seleccionado not in metas_socios:
+            continue
+        meta_socio = metas_socios[socio_seleccionado]
+        
+        # Filtrar ejecuciones reales registradas
+        df_act = df_filtered[
+            (df_filtered["Socio"] == socio_seleccionado)
+            & (
+                df_filtered["Actividad"].str.contains(act_nombre, case=False, na=False)
+                | df_filtered["Sector"].str.contains(sec, case=False, na=False)
+            )
+        ]
+        alcanzado_val = int(round(df_act["suma_total"].sum()))
+        pct = (alcanzado_val / meta_socio * 100) if meta_socio > 0 else 0.0
+
+        filas_reporte.append(
+            {
+                "Sector": sec,
+                "Actividad": act_nombre,
+                "Socio": socio_seleccionado,
+                "Meta Proyecto": meta_proy,
+                "Meta Socio": meta_socio,
+                "Alcanzado (Absoluto)": alcanzado_val,
+                "% Avance": round(pct, 1),
+            }
+        )
+    else:
+        for s_nombre, meta_socio in metas_socios.items():
+            df_act = df_filtered[
+                (df_filtered["Socio"] == s_nombre)
+                & (
+                    df_filtered["Actividad"].str.contains(act_nombre, case=False, na=False)
+                    | df_filtered["Sector"].str.contains(sec, case=False, na=False)
+                )
+            ]
+            alcanzado_val = int(round(df_act["suma_total"].sum()))
+            pct = (alcanzado_val / meta_socio * 100) if meta_socio > 0 else 0.0
+
+            filas_reporte.append(
+                {
+                    "Sector": sec,
+                    "Actividad": act_nombre,
+                    "Socio": s_nombre,
+                    "Meta Proyecto": meta_proy,
+                    "Meta Socio": meta_socio,
+                    "Alcanzado (Absoluto)": alcanzado_val,
+                    "% Avance": round(pct, 1),
+                }
+            )
+
+df_reporte_act = pd.DataFrame(filas_reporte)
+
+if not df_reporte_act.empty:
+    st.dataframe(
+        df_reporte_act.style.format(
+            {
+                "Meta Proyecto": "{:,}",
+                "Meta Socio": "{:,}",
+                "Alcanzado (Absoluto)": "{:,}",
+                "% Avance": "{:.1f}%",
+            }
+        ).background_gradient(
+            subset=["% Avance"], cmap="YlGn", vmin=0, vmax=100
+        ),
+        use_container_width=True,
+        height=380,
+    )
+else:
+    st.info("No se registraron actividades correspondientes a los filtros seleccionados.")
