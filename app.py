@@ -244,12 +244,12 @@ def cargar_datos_desde_data():
                 base_name.replace("_", " ").replace("-", " ").strip()
             )
 
-            # Proyecto
+            # Proyecto / Socio
             col_proy = next(
                 (
                     c
                     for k, c in cols_clean.items()
-                    if k in ["proyecto", "nombre_proyecto", "nombre del proyecto"]
+                    if k in ["proyecto", "nombre_proyecto", "nombre del proyecto", "socio", "ong"]
                 ),
                 None,
             )
@@ -268,7 +268,7 @@ def cargar_datos_desde_data():
                 (
                     c
                     for k, c in cols_clean.items()
-                    if k in ["año", "anio", "year", "fecha", "fecha "]
+                    if k in ["año", "anio", "year", "fecha", "fecha ", "mes", "mes del reporte"]
                 ),
                 None,
             )
@@ -461,64 +461,100 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES EN CASCADA CON ESTADO DINÁMICO
+# 4. BOTONES Y FILTROS LATERALES EN CASCADA
 # -----------------------------------------------------------------------------
-st.sidebar.title("Filtros de Navegación")
+st.sidebar.subheader("Sincronización en Tiempo Real")
+col_act, col_limp = st.sidebar.columns(2)
+
+if col_act.button("🔄 Actualizar", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+
+def reset_filtros():
+    for key in ["f_anio", "f_proy", "f_est", "f_muni", "f_sec", "f_sexo", "f_demo"]:
+        if key in st.session_state:
+            st.session_state[key] = "Todos"
+
+if col_limp.button("🧹 Limpiar Filtros", use_container_width=True):
+    reset_filtros()
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Filtros de Consulta General")
 
 
-def obtener_opciones_limpias(df, columna):
-    if columna not in df.columns:
-        return []
+def obtener_opciones_select(df, columna):
+    if df.empty or columna not in df.columns:
+        return ["Todos"]
     s = df[columna].dropna().astype(str).str.strip()
-    unicos = [
-        x for x in s.unique() if str(x).lower() not in ["nan", "none", "", "<na>"]
-    ]
-    return sorted(unicos)
+    unicos = sorted([x for x in s.unique() if str(x).lower() not in ["nan", "none", "", "<na>"]])
+    return ["Todos"] + unicos
 
 
-# --- Nivel 1: Proyecto ---
-opc_proy = obtener_opciones_limpias(df_base, "Proyecto")
-proy_sel = st.sidebar.multiselect("Proyecto:", opc_proy, default=opc_proy, key="f_proy")
+# --- Nivel 1: Mes del Reporte / Año ---
+opc_anio = obtener_opciones_select(df_base, "Año")
+if "f_anio" in st.session_state and st.session_state["f_anio"] not in opc_anio:
+    st.session_state["f_anio"] = "Todos"
+sel_anio = st.sidebar.selectbox("Mes del Reporte:", opc_anio, key="f_anio")
 
-df_c1 = df_base[df_base["Proyecto"].astype(str).str.strip().isin(proy_sel)]
+df_f1 = df_base if sel_anio == "Todos" else df_base[df_base["Año"].astype(str).str.strip() == sel_anio]
 
-# --- Nivel 2: Año (filtrado por Proyecto) ---
-opc_anio = obtener_opciones_limpias(df_c1, "Año")
-def_anio = [x for x in st.session_state.get("f_anio", opc_anio) if x in opc_anio]
-if not def_anio:
-    def_anio = opc_anio
-anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=def_anio, key="f_anio")
+# --- Nivel 2: Socio / ONG / Proyecto ---
+opc_proy = obtener_opciones_select(df_f1, "Proyecto")
+if "f_proy" in st.session_state and st.session_state["f_proy"] not in opc_proy:
+    st.session_state["f_proy"] = "Todos"
+sel_proy = st.sidebar.selectbox("Socio / ONG:", opc_proy, key="f_proy")
 
-df_c2 = df_c1[df_c1["Año"].astype(str).str.strip().isin(anio_sel)]
+df_f2 = df_f1 if sel_proy == "Todos" else df_f1[df_f1["Proyecto"].astype(str).str.strip() == sel_proy]
 
-# --- Nivel 3: Estado (filtrado por Proyecto y Año) ---
-opc_est = obtener_opciones_limpias(df_c2, "Estado_Clean")
-def_est = [x for x in st.session_state.get("f_est", opc_est) if x in opc_est]
-if not def_est:
-    def_est = opc_est
-est_sel = st.sidebar.multiselect("Estado:", opc_est, default=def_est, key="f_est")
+# --- Nivel 3: Estado ---
+opc_est = obtener_opciones_select(df_f2, "Estado_Clean")
+if "f_est" in st.session_state and st.session_state["f_est"] not in opc_est:
+    st.session_state["f_est"] = "Todos"
+sel_est = st.sidebar.selectbox("Estado:", opc_est, key="f_est")
 
-df_c3 = df_c2[df_c2["Estado_Clean"].astype(str).str.strip().isin(est_sel)]
+df_f3 = df_f2 if sel_est == "Todos" else df_f2[df_f2["Estado_Clean"].astype(str).str.strip() == sel_est]
 
-# --- Nivel 4: Municipio (filtrado por Proyecto, Año y Estado) ---
-opc_muni = obtener_opciones_limpias(df_c3, "Municipio_Clean")
-def_muni = [x for x in st.session_state.get("f_muni", opc_muni) if x in opc_muni]
-if not def_muni:
-    def_muni = opc_muni
-muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=def_muni, key="f_muni")
+# --- Nivel 4: Municipio ---
+opc_muni = obtener_opciones_select(df_f3, "Municipio_Clean")
+if "f_muni" in st.session_state and st.session_state["f_muni"] not in opc_muni:
+    st.session_state["f_muni"] = "Todos"
+sel_muni = st.sidebar.selectbox("Municipio:", opc_muni, key="f_muni")
 
-df_c4 = df_c3[df_c3["Municipio_Clean"].astype(str).str.strip().isin(muni_sel)]
+df_f4 = df_f3 if sel_muni == "Todos" else df_f3[df_f3["Municipio_Clean"].astype(str).str.strip() == sel_muni]
 
-# --- Nivel 5: Sector (filtrado por Niveles 1-4) ---
-opc_sec = obtener_opciones_limpias(df_c4, "Sector")
-def_sec = [x for x in st.session_state.get("f_sec", opc_sec) if x in opc_sec]
-if not def_sec:
-    def_sec = opc_sec
-sec_sel = st.sidebar.multiselect(
-    "Sector de Implementación:", opc_sec, default=def_sec, key="f_sec"
-)
+# --- Nivel 5: Sector de Implementación ---
+opc_sec = obtener_opciones_select(df_f4, "Sector")
+if "f_sec" in st.session_state and st.session_state["f_sec"] not in opc_sec:
+    st.session_state["f_sec"] = "Todos"
+sel_sec = st.sidebar.selectbox("Sector de Implementación:", opc_sec, key="f_sec")
 
-df_filtered = df_c4[df_c4["Sector"].astype(str).str.strip().isin(sec_sel)]
+df_f5 = df_f4 if sel_sec == "Todos" else df_f4[df_f4["Sector"].astype(str).str.strip() == sel_sec]
+
+# --- Nivel 6: Sexo del Participante ---
+opc_sexo = ["Todos", "Mujer", "Hombre"]
+if "f_sexo" in st.session_state and st.session_state["f_sexo"] not in opc_sexo:
+    st.session_state["f_sexo"] = "Todos"
+sel_sexo = st.sidebar.selectbox("Sexo del Participante:", opc_sexo, key="f_sexo")
+
+# --- Nivel 7: Grupo Demográfico ---
+opc_demo = ["Todos", "Niños/Niñas (0-17)", "Adultos (18-59)", "Adultos Mayores (60+)"]
+if "f_demo" in st.session_state and st.session_state["f_demo"] not in opc_demo:
+    st.session_state["f_demo"] = "Todos"
+sel_demo = st.sidebar.selectbox("Grupo Demográfico:", opc_demo, key="f_demo")
+
+# Filtrado por Sexo
+df_filtered = df_f5.copy()
+if sel_sexo == "Hombre":
+    df_filtered["suma_mujeres"] = 0
+    df_filtered["unicos_mujeres"] = 0
+    df_filtered["suma_total"] = df_filtered["suma_hombres"]
+    df_filtered["unicos_total"] = df_filtered["unicos_hombres"]
+elif sel_sexo == "Mujer":
+    df_filtered["suma_hombres"] = 0
+    df_filtered["unicos_hombres"] = 0
+    df_filtered["suma_total"] = df_filtered["suma_mujeres"]
+    df_filtered["unicos_total"] = df_filtered["unicos_mujeres"]
 
 # -----------------------------------------------------------------------------
 # 5. GENERAL DE ATENCIONES Y COBERTURA
@@ -528,7 +564,7 @@ st.subheader("General de Atenciones y Cobertura")
 total_atenciones = int(round(df_filtered["suma_total"].sum()))
 unicos_participantes = (
     2449
-    if len(df_filtered) == len(df_base)
+    if len(df_filtered) == len(df_base) and sel_sexo == "Todos"
     else int(round(df_filtered["unicos_total"].sum()))
 )
 
@@ -544,8 +580,8 @@ st.markdown("---")
 st.subheader("Distribución de Participantes por Grupos de Vulnerabilidad (%)")
 
 v1, v2, v3, v4, v5, v6 = st.columns(6)
-v1.metric("% Mujeres", "62.7%")
-v2.metric("% Hombres", "37.2%")
+v1.metric("% Mujeres", "62.7%" if sel_sexo != "Hombre" else "0.0%")
+v2.metric("% Hombres", "37.2%" if sel_sexo != "Mujer" else "0.0%")
 v3.metric("% Niñas y Niños", "1.3%")
 v4.metric("% Discapacidad", "0.0%")
 v5.metric("% Indígenas", "0.0%")
@@ -583,6 +619,10 @@ df_etario = pd.DataFrame(
         ],
     }
 )
+
+if sel_demo != "Todos":
+    df_etario = df_etario[df_etario["Grupo Etario"] == sel_demo]
+
 tot_et = max(df_etario["Unicos"].sum(), 1)
 df_etario["Porcentaje"] = ((df_etario["Unicos"] / tot_et) * 100).round(1)
 df_etario["Etiqueta"] = df_etario.apply(
@@ -622,7 +662,7 @@ df_sec = (
 )
 df_sec["Unicos"] = df_sec["Unicos"].round().astype(int)
 
-if len(df_filtered) == len(df_base):
+if len(df_filtered) == len(df_base) and sel_sexo == "Todos":
     diff_sec = 2449 - df_sec["Unicos"].sum()
     if diff_sec != 0 and not df_sec.empty:
         max_idx = df_sec["Unicos"].idxmax()
@@ -723,7 +763,7 @@ df_mun_bar = (
 )
 df_mun_bar["Unicos"] = df_mun_bar["Unicos"].round().astype(int)
 
-if len(df_filtered) == len(df_base):
+if len(df_filtered) == len(df_base) and sel_sexo == "Todos":
     diff_mun = 2449 - df_mun_bar["Unicos"].sum()
     if diff_mun != 0 and not df_mun_bar.empty:
         max_idx_m = df_mun_bar["Unicos"].idxmax()
