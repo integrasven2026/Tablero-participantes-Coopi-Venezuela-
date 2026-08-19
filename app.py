@@ -37,7 +37,7 @@ FACTOR_UNICOS = 2449 / 4462
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 1.5rem; }
+    .block-container { padding-top: 1rem; }
     h1, h2, h3 { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     </style>
 """,
@@ -102,32 +102,27 @@ MAPA_MUNICIPIOS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO OFICIAL
+# 2. ENCABEZADO CON LOGO OFICIAL CORREGIDO
 # -----------------------------------------------------------------------------
-col_tit, col_logo = st.columns([3.2, 1.2])
+col_tit, col_logo = st.columns([3, 1])
 
 with col_tit:
     st.title("Consolidación Histórica de Participantes y Atenciones")
     st.caption("COOPI - Cooperazione Internazionale | Misión Venezuela")
 
 with col_logo:
-    ruta_logo_local = "coopi.jpg"
     url_logo_raw = "https://raw.githubusercontent.com/integrasven2026/Tablero-participantes-Coopi-Venezuela-/main/coopi.jpg"
-
-    if os.path.exists(ruta_logo_local):
-        st.image(ruta_logo_local, width=220)
-    else:
-        st.markdown(
-            f"""
-            <div style="text-align: right; padding-top: 5px;">
-                <img src="{url_logo_raw}" 
-                     style="max-width: 220px; height: auto;" 
-                     alt="Logo Oficial COOPI"
-                     onerror="this.src='https://www.coopi.org/images/logo.png'">
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%; padding-top: 5px;">
+            <img src="{url_logo_raw}" 
+                 style="max-width: 200px; width: 100%; height: auto; object-fit: contain;" 
+                 alt="Logo Oficial COOPI"
+                 onerror="this.src='https://www.coopi.org/images/logo.png'">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown("---")
 
