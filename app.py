@@ -461,7 +461,7 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES EN CASCADA
+# 4. FILTROS LATERALES EN CASCADA CON ESTADO DINÁMICO
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
@@ -478,35 +478,46 @@ def obtener_opciones_limpias(df, columna):
 
 # --- Nivel 1: Proyecto ---
 opc_proy = obtener_opciones_limpias(df_base, "Proyecto")
-proy_sel = st.sidebar.multiselect("Proyecto:", opc_proy, default=opc_proy)
+proy_sel = st.sidebar.multiselect("Proyecto:", opc_proy, default=opc_proy, key="f_proy")
 
 df_c1 = df_base[df_base["Proyecto"].astype(str).str.strip().isin(proy_sel)]
 
 # --- Nivel 2: Año (filtrado por Proyecto) ---
 opc_anio = obtener_opciones_limpias(df_c1, "Año")
-anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=opc_anio)
+def_anio = [x for x in st.session_state.get("f_anio", opc_anio) if x in opc_anio]
+if not def_anio:
+    def_anio = opc_anio
+anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=def_anio, key="f_anio")
 
 df_c2 = df_c1[df_c1["Año"].astype(str).str.strip().isin(anio_sel)]
 
 # --- Nivel 3: Estado (filtrado por Proyecto y Año) ---
 opc_est = obtener_opciones_limpias(df_c2, "Estado_Clean")
-est_sel = st.sidebar.multiselect("Estado:", opc_est, default=opc_est)
+def_est = [x for x in st.session_state.get("f_est", opc_est) if x in opc_est]
+if not def_est:
+    def_est = opc_est
+est_sel = st.sidebar.multiselect("Estado:", opc_est, default=def_est, key="f_est")
 
 df_c3 = df_c2[df_c2["Estado_Clean"].astype(str).str.strip().isin(est_sel)]
 
 # --- Nivel 4: Municipio (filtrado por Proyecto, Año y Estado) ---
 opc_muni = obtener_opciones_limpias(df_c3, "Municipio_Clean")
-muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=opc_muni)
+def_muni = [x for x in st.session_state.get("f_muni", opc_muni) if x in opc_muni]
+if not def_muni:
+    def_muni = opc_muni
+muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=def_muni, key="f_muni")
 
 df_c4 = df_c3[df_c3["Municipio_Clean"].astype(str).str.strip().isin(muni_sel)]
 
-# --- Nivel 5: Sector (filtrado por Proyecto, Año, Estado y Municipio) ---
+# --- Nivel 5: Sector (filtrado por Niveles 1-4) ---
 opc_sec = obtener_opciones_limpias(df_c4, "Sector")
+def_sec = [x for x in st.session_state.get("f_sec", opc_sec) if x in opc_sec]
+if not def_sec:
+    def_sec = opc_sec
 sec_sel = st.sidebar.multiselect(
-    "Sector de Implementación:", opc_sec, default=opc_sec
+    "Sector de Implementación:", opc_sec, default=def_sec, key="f_sec"
 )
 
-# DataFrame final filtrado según la selección en cascada
 df_filtered = df_c4[df_c4["Sector"].astype(str).str.strip().isin(sec_sel)]
 
 # -----------------------------------------------------------------------------
