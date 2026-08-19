@@ -461,7 +461,7 @@ if df_base.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. FILTROS LATERALES LIMPIOS
+# 4. FILTROS LATERALES EN CASCADA
 # -----------------------------------------------------------------------------
 st.sidebar.title("Filtros de Navegación")
 
@@ -476,30 +476,38 @@ def obtener_opciones_limpias(df, columna):
     return sorted(unicos)
 
 
+# --- Nivel 1: Proyecto ---
 opc_proy = obtener_opciones_limpias(df_base, "Proyecto")
 proy_sel = st.sidebar.multiselect("Proyecto:", opc_proy, default=opc_proy)
 
-opc_anio = obtener_opciones_limpias(df_base, "Año")
+df_c1 = df_base[df_base["Proyecto"].astype(str).str.strip().isin(proy_sel)]
+
+# --- Nivel 2: Año (filtrado por Proyecto) ---
+opc_anio = obtener_opciones_limpias(df_c1, "Año")
 anio_sel = st.sidebar.multiselect("Año:", opc_anio, default=opc_anio)
 
-opc_est = obtener_opciones_limpias(df_base, "Estado_Clean")
+df_c2 = df_c1[df_c1["Año"].astype(str).str.strip().isin(anio_sel)]
+
+# --- Nivel 3: Estado (filtrado por Proyecto y Año) ---
+opc_est = obtener_opciones_limpias(df_c2, "Estado_Clean")
 est_sel = st.sidebar.multiselect("Estado:", opc_est, default=opc_est)
 
-opc_muni = obtener_opciones_limpias(df_base, "Municipio_Clean")
+df_c3 = df_c2[df_c2["Estado_Clean"].astype(str).str.strip().isin(est_sel)]
+
+# --- Nivel 4: Municipio (filtrado por Proyecto, Año y Estado) ---
+opc_muni = obtener_opciones_limpias(df_c3, "Municipio_Clean")
 muni_sel = st.sidebar.multiselect("Municipio:", opc_muni, default=opc_muni)
 
-opc_sec = obtener_opciones_limpias(df_base, "Sector")
+df_c4 = df_c3[df_c3["Municipio_Clean"].astype(str).str.strip().isin(muni_sel)]
+
+# --- Nivel 5: Sector (filtrado por Proyecto, Año, Estado y Municipio) ---
+opc_sec = obtener_opciones_limpias(df_c4, "Sector")
 sec_sel = st.sidebar.multiselect(
     "Sector de Implementación:", opc_sec, default=opc_sec
 )
 
-df_filtered = df_base[
-    (df_base["Proyecto"].astype(str).str.strip().isin(proy_sel))
-    & (df_base["Año"].astype(str).str.strip().isin(anio_sel))
-    & (df_base["Estado_Clean"].astype(str).str.strip().isin(est_sel))
-    & (df_base["Municipio_Clean"].astype(str).str.strip().isin(muni_sel))
-    & (df_base["Sector"].astype(str).str.strip().isin(sec_sel))
-]
+# DataFrame final filtrado según la selección en cascada
+df_filtered = df_c4[df_c4["Sector"].astype(str).str.strip().isin(sec_sel)]
 
 # -----------------------------------------------------------------------------
 # 5. GENERAL DE ATENCIONES Y COBERTURA
