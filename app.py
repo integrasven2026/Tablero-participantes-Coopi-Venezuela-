@@ -111,17 +111,23 @@ with col_tit:
     st.caption("COOPI - Cooperazione Internazionale | Misión Venezuela")
 
 with col_logo:
-    st.markdown(
-        """
-        <div style="text-align: right; padding-top: 5px;">
-            <img src="https://www.coopi.org/images/logo.png" 
-                 style="max-width: 210px; height: auto;" 
-                 alt="Logo Oficial COOPI"
-                 onerror="this.src='https://raw.githubusercontent.com/integrasven2026/tablero-integras-meal/main/logo_coopi.png'">
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    ruta_logo_local = "coopi.jpg"
+    url_logo_raw = "https://raw.githubusercontent.com/integrasven2026/Tablero-participantes-Coopi-Venezuela-/main/coopi.jpg"
+
+    if os.path.exists(ruta_logo_local):
+        st.image(ruta_logo_local, width=220)
+    else:
+        st.markdown(
+            f"""
+            <div style="text-align: right; padding-top: 5px;">
+                <img src="{url_logo_raw}" 
+                     style="max-width: 220px; height: auto;" 
+                     alt="Logo Oficial COOPI"
+                     onerror="this.src='https://www.coopi.org/images/logo.png'">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 st.markdown("---")
 
