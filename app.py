@@ -102,7 +102,7 @@ MAPA_MUNICIPIOS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. ENCABEZADO CON LOGO OFICIAL CORREGIDO
+# 2. ENCABEZADO CON LOGO OFICIAL OPTIMIZADO
 # -----------------------------------------------------------------------------
 col_tit, col_logo = st.columns([3, 1])
 
@@ -114,9 +114,9 @@ with col_logo:
     url_logo_raw = "https://raw.githubusercontent.com/integrasven2026/Tablero-participantes-Coopi-Venezuela-/main/coopi.jpg"
     st.markdown(
         f"""
-        <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%; padding-top: 5px;">
+        <div style="display: flex; justify-content: flex-end; align-items: center; padding: 5px 0;">
             <img src="{url_logo_raw}" 
-                 style="max-width: 200px; width: 100%; height: auto; object-fit: contain;" 
+                 style="max-height: 85px; width: auto; object-fit: contain;" 
                  alt="Logo Oficial COOPI"
                  onerror="this.src='https://www.coopi.org/images/logo.png'">
         </div>
@@ -650,7 +650,7 @@ with g1:
             yaxis=dict(range=[0, max(df_etario["Unicos"].max() * 1.25, 10)]),
             height=420,
         )
-        st.plotly_chart(fig_et, width="stretch")
+        st.plotly_chart(fig_et, use_container_width=True)
     else:
         st.bar_chart(df_etario.set_index("Grupo Etario")["Unicos"])
 
@@ -700,7 +700,7 @@ with g2:
             height=420,
             margin=dict(t=20, b=50, l=10, r=10),
         )
-        st.plotly_chart(fig_s, width="stretch")
+        st.plotly_chart(fig_s, use_container_width=True)
     else:
         st.bar_chart(df_sec.set_index("Sector")["Unicos"])
 
@@ -810,7 +810,7 @@ with col_m1:
             showlegend=False,
             height=420,
         )
-        st.plotly_chart(fig_map, width="stretch")
+        st.plotly_chart(fig_map, use_container_width=True)
     elif not df_map_final.empty:
         st.map(df_map_final[["lat", "lon"]])
     else:
@@ -836,6 +836,6 @@ with col_m2:
             yaxis=dict(range=[0, max(df_mun_bar["Unicos"].max() * 1.25, 10)]),
             height=420,
         )
-        st.plotly_chart(fig_m, width="stretch")
+        st.plotly_chart(fig_m, use_container_width=True)
     else:
         st.bar_chart(df_mun_bar.set_index("Municipio")["Unicos"])
